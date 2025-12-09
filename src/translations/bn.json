@@ -1,0 +1,23 @@
+{
+  "appName": "ReelsAudio.in",
+  "tagline": "Instagram Reels থেকে অডিও ডাউনলোড করুন",
+  "inputPlaceholder": "Instagram Reels লিঙ্ক এখানে পেস্ট করুন...",
+  "downloadButton": "এখনই অডিও ডাউনলোড করুন",
+  "downloading": "ডাউনলোড হচ্ছে...",
+  "processing": "অডিও বের করা হচ্ছে...",
+  "success": "সফল!",
+  "error": "ত্রুটি",
+  "invalidUrl": "অনুগ্রহ করে একটি বৈধ Instagram Reels লিঙ্ক লিখুন",
+  "downloadMp3": "MP3 ডাউনলোড করুন",
+  "openInCapCut": "CapCut এ খুলুন",
+  "openInInShot": "InShot এ খুলুন",
+  "share": "শেয়ার করুন",
+  "trending": "ট্রেন্ডিং",
+  "trendingTitle": "ট্রেন্ডিং Reels অডিও",
+  "downloadsToday": "জন আজ ডাউনলোড করেছেন",
+  "darkMode": "ডার্ক মোড",
+  "lightMode": "লাইট মোড",
+  "addToHomeScreen": "হোম স্ক্রীনে যোগ করুন",
+  "tryAgain": "আবার চেষ্টা করুন"
+}
+

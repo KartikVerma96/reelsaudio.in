@@ -1,0 +1,23 @@
+{
+  "appName": "ReelsAudio.in",
+  "tagline": "Download Audio from Instagram Reels",
+  "inputPlaceholder": "Paste Instagram Reels link here...",
+  "downloadButton": "Download Audio Now",
+  "downloading": "Downloading...",
+  "processing": "Extracting audio...",
+  "success": "Success!",
+  "error": "Error",
+  "invalidUrl": "Please enter a valid Instagram Reels link",
+  "downloadMp3": "Download MP3",
+  "openInCapCut": "Open in CapCut",
+  "openInInShot": "Open in InShot",
+  "share": "Share",
+  "trending": "Trending",
+  "trendingTitle": "Trending Reels Audio",
+  "downloadsToday": "people downloaded today",
+  "darkMode": "Dark Mode",
+  "lightMode": "Light Mode",
+  "addToHomeScreen": "Add to Home Screen",
+  "tryAgain": "Try Again"
+}
+

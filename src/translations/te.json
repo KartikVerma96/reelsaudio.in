@@ -1,0 +1,23 @@
+{
+  "appName": "ReelsAudio.in",
+  "tagline": "Instagram Reels నుండి ఆడియోను డౌన్‌లోడ్ చేయండి",
+  "inputPlaceholder": "Instagram Reels లింక్‌ను ఇక్కడ పేస్ట్ చేయండి...",
+  "downloadButton": "ఇప్పుడే ఆడియోను డౌన్‌లోడ్ చేయండి",
+  "downloading": "డౌన్‌లోడ్ అవుతోంది...",
+  "processing": "ఆడియోను సంగ్రహిస్తోంది...",
+  "success": "విజయం!",
+  "error": "దోషం",
+  "invalidUrl": "దయచేసి చెల్లుబాటు అయ్యే Instagram Reels లింక్‌ను నమోదు చేయండి",
+  "downloadMp3": "MP3 డౌన్‌లోడ్ చేయండి",
+  "openInCapCut": "CapCut లో తెరవండి",
+  "openInInShot": "InShot లో తెరవండి",
+  "share": "షేర్ చేయండి",
+  "trending": "ట్రెండింగ్",
+  "trendingTitle": "ట్రెండింగ్ Reels ఆడియో",
+  "downloadsToday": "మంది ఈరోజు డౌన్‌లోడ్ చేశారు",
+  "darkMode": "డార్క్ మోడ్",
+  "lightMode": "లైట్ మోడ్",
+  "addToHomeScreen": "హోమ్ స్క్రీన్‌కు జోడించండి",
+  "tryAgain": "మళ్లీ ప్రయత్నించండి"
+}
+

@@ -1,0 +1,30 @@
+{
+  "name": "reelsaudio",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "docker:build": "docker build -t reelsaudio:latest .",
+    "docker:run": "docker run -p 3000:3000 reelsaudio:latest",
+    "docker:compose": "docker-compose up",
+    "health": "curl http://localhost:3000/api/health",
+    "metrics": "curl http://localhost:3000/api/metrics"
+  },
+  "dependencies": {
+    "next": "^15.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "@ffmpeg/ffmpeg": "^0.12.10",
+    "@ffmpeg/core": "^0.12.6",
+    "@ffmpeg/util": "^0.12.1"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.13"
+  }
+}
+

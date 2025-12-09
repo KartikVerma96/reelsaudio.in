@@ -1,0 +1,23 @@
+{
+  "appName": "ReelsAudio.in",
+  "tagline": "Instagram Reels இலிருந்து ஆடியோவைப் பதிவிறக்கவும்",
+  "inputPlaceholder": "Instagram Reels இணைப்பை இங்கே ஒட்டவும்...",
+  "downloadButton": "இப்போது ஆடியோவைப் பதிவிறக்கவும்",
+  "downloading": "பதிவிறக்குகிறது...",
+  "processing": "ஆடியோவைப் பிரித்தெடுக்கிறது...",
+  "success": "வெற்றி!",
+  "error": "பிழை",
+  "invalidUrl": "செல்லுபடியாகும் Instagram Reels இணைப்பை உள்ளிடவும்",
+  "downloadMp3": "MP3 பதிவிறக்க",
+  "openInCapCut": "CapCut இல் திறக்க",
+  "openInInShot": "InShot இல் திறக்க",
+  "share": "பகிர்",
+  "trending": "பிரபலமான",
+  "trendingTitle": "பிரபலமான Reels ஆடியோ",
+  "downloadsToday": "பேர் இன்று பதிவிறக்கினர்",
+  "darkMode": "இருண்ட முறை",
+  "lightMode": "வெளிச்ச முறை",
+  "addToHomeScreen": "முகப்புத் திரையில் சேர்",
+  "tryAgain": "மீண்டும் முயற்சிக்கவும்"
+}
+

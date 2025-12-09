@@ -1,0 +1,20 @@
+User-agent: *
+Allow: /
+
+# Disallow admin and API routes
+Disallow: /api/
+Disallow: /_next/
+Disallow: /admin/
+
+# Allow important pages
+Allow: /
+Allow: /how-to
+Allow: /faq
+Allow: /about
+
+# Crawl-delay
+Crawl-delay: 1
+
+# Sitemap
+Sitemap: https://reelsaudio.in/sitemap.xml
+
