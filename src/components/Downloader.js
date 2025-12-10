@@ -20,7 +20,17 @@ export default function Downloader({ lang = 'en' }) {
   const t = getAllTranslations(lang);
 
   useEffect(() => {
-    loadFFmpeg();
+    // Load FFmpeg lazily in the background - don't block UI
+    // Use requestIdleCallback for better performance, fallback to setTimeout
+    const loadFFmpegLazy = () => {
+      if (window.requestIdleCallback) {
+        window.requestIdleCallback(() => loadFFmpeg(), { timeout: 2000 });
+      } else {
+        setTimeout(() => loadFFmpeg(), 100);
+      }
+    };
+    
+    loadFFmpegLazy();
     
     // Check if there's a pre-filled URL from trending page
     if (typeof window !== 'undefined') {
@@ -159,9 +169,23 @@ export default function Downloader({ lang = 'en' }) {
       return;
     }
 
+    // If FFmpeg is not loaded yet, wait for it (but don't block UI)
     if (!ffmpegLoaded || !ffmpeg) {
-      setError('Audio processor is still loading. Please wait...');
-      return;
+      setLoading(true);
+      setError('Initializing audio processor...');
+      // Wait up to 10 seconds for FFmpeg to load
+      let attempts = 0;
+      const maxAttempts = 20; // 20 * 500ms = 10 seconds
+      while (!ffmpegLoaded && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        attempts++;
+      }
+      if (!ffmpegLoaded || !ffmpeg) {
+        setLoading(false);
+        setError('Audio processor failed to load. Please refresh the page.');
+        return;
+      }
+      setError('');
     }
 
     setLoading(true);
@@ -450,15 +474,15 @@ export default function Downloader({ lang = 'en' }) {
             </div>
           </div>
 
-          {/* FFmpeg Loading Indicator */}
-          {!ffmpegLoaded && !error && (
-            <div className="p-4 bg-blue-100/90 dark:bg-blue-900/40 border-2 border-blue-400 dark:border-blue-700 text-blue-800 dark:text-blue-200 rounded-2xl shadow-lg animate-fadeIn">
-              <div className="flex items-center gap-3">
-                <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          {/* FFmpeg Loading Indicator - Only show if user hasn't interacted yet */}
+          {!ffmpegLoaded && !error && !loading && (
+            <div className="p-3 bg-blue-50/80 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 rounded-xl text-sm animate-fadeIn">
+              <div className="flex items-center gap-2">
+                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                <p className="font-semibold">Initializing audio processor...</p>
+                <p className="text-xs">Preparing audio processor in background...</p>
               </div>
             </div>
           )}
@@ -466,7 +490,7 @@ export default function Downloader({ lang = 'en' }) {
           {/* Download Button */}
           <button
             onClick={handleDownload}
-            disabled={loading || !ffmpegLoaded}
+            disabled={loading}
             className="relative w-full py-5 px-6 bg-gradient-to-r from-orange-500 via-pink-500 to-purple-500 hover:from-orange-600 hover:via-pink-600 hover:to-purple-600 text-white font-bold text-lg rounded-2xl shadow-2xl transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden group"
           >
             <div className="absolute inset-0 shimmer opacity-0 group-hover:opacity-100 transition-opacity"></div>
@@ -478,14 +502,6 @@ export default function Downloader({ lang = 'en' }) {
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
                   <span>{progress > 0 ? `${t.processing} ${progress}%` : t.downloading}</span>
-                </>
-              ) : !ffmpegLoaded ? (
-                <>
-                  <svg className="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  <span>Loading...</span>
                 </>
               ) : (
                 <>

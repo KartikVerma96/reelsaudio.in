@@ -5,16 +5,13 @@ import Downloader from '../components/Downloader';
 import { detectLanguage, getAllTranslations } from '../lib/translations';
 
 export default function Home() {
-  const [lang, setLang] = useState('en');
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    const detectedLang = detectLanguage();
-    setLang(detectedLang);
-  }, []);
-
-  if (!mounted) return null;
+  // Detect language synchronously on first render for instant display
+  const [lang] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return detectLanguage();
+    }
+    return 'en';
+  });
 
   return (
     <main className="min-h-screen py-6 md:py-8 px-4 md:px-8 relative z-10">
