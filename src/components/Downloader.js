@@ -7,6 +7,7 @@ import { isValidInstagramReelUrl } from '../lib/ig-scraper';
 import { getAllTranslations } from '../lib/translations';
 import ShareButtons from './ShareButtons';
 import toast from 'react-hot-toast';
+import { SuccessIcon, DownloadIcon, AudioIcon } from './ToastIcons';
 import AdSlot from './AdSlot';
 
 export default function Downloader({ lang = 'en' }) {
@@ -192,7 +193,9 @@ export default function Downloader({ lang = 'en' }) {
         return;
       }
       toast.dismiss(loadingToast);
-      toast.success('Audio processor ready!');
+      toast.success('Audio processor ready!', {
+        icon: <SuccessIcon />,
+      });
     }
 
     const processingToast = toast.loading('Processing your request...', { duration: Infinity });
@@ -419,9 +422,9 @@ export default function Downloader({ lang = 'en' }) {
 
       // Success toast
       toast.dismiss(processingToast);
-      toast.success('🎉 Audio extracted successfully!', {
+      toast.success('Audio extracted successfully!', {
         duration: 5000,
-        icon: '🎵',
+        icon: <AudioIcon />,
       });
 
     } catch (err) {
@@ -448,8 +451,9 @@ export default function Downloader({ lang = 'en' }) {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      toast.success('Download started! 🎵', {
+      toast.success('Download started!', {
         duration: 3000,
+        icon: <DownloadIcon />,
       });
     }
   };
