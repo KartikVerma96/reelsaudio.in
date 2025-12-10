@@ -458,19 +458,6 @@ export default function Downloader({ lang = 'en' }) {
     }
   };
 
-  const handleOpenInCapCut = () => {
-    if (audioBlob) {
-      // CapCut deep link (may need adjustment based on actual CapCut URL scheme)
-      window.open(`capcut://import?audio=${encodeURIComponent(audioUrl)}`, '_blank');
-    }
-  };
-
-  const handleOpenInInShot = () => {
-    if (audioBlob) {
-      // InShot deep link (may need adjustment based on actual InShot URL scheme)
-      window.open(`inshot://import?audio=${encodeURIComponent(audioUrl)}`, '_blank');
-    }
-  };
 
   return (
     <div className="w-full max-w-3xl mx-auto animate-slideUp">
@@ -558,35 +545,19 @@ export default function Downloader({ lang = 'en' }) {
                 </audio>
               </div>
 
-              {/* Action Buttons */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
-                <button
-                  onClick={handleDownloadMp3}
-                  className="group py-4 px-4 md:px-5 bg-gradient-to-r from-green-600 via-emerald-600 to-green-600 hover:from-green-700 hover:via-emerald-700 hover:to-green-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all active:scale-95 relative overflow-hidden"
-                >
-                  <div className="absolute inset-0 shimmer opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                  <span className="relative flex items-center justify-center gap-2 text-sm md:text-base">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    {t.downloadMp3}
-                  </span>
-                </button>
-                <button
-                  onClick={handleOpenInCapCut}
-                  className="group py-4 px-4 md:px-5 bg-gradient-to-r from-blue-600 via-cyan-600 to-blue-600 hover:from-blue-700 hover:via-cyan-700 hover:to-blue-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all active:scale-95 relative overflow-hidden"
-                >
-                  <div className="absolute inset-0 shimmer opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                  <span className="relative text-sm md:text-base">{t.openInCapCut}</span>
-                </button>
-                <button
-                  onClick={handleOpenInInShot}
-                  className="group py-4 px-4 md:px-5 bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 hover:from-indigo-700 hover:via-purple-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all active:scale-95 relative overflow-hidden"
-                >
-                  <div className="absolute inset-0 shimmer opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                  <span className="relative text-sm md:text-base">{t.openInInShot}</span>
-                </button>
-              </div>
+              {/* Download MP3 Button */}
+              <button
+                onClick={handleDownloadMp3}
+                className="group w-full py-4 px-4 md:px-5 bg-gradient-to-r from-green-600 via-emerald-600 to-green-600 hover:from-green-700 hover:via-emerald-700 hover:to-green-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all active:scale-95 relative overflow-hidden"
+              >
+                <div className="absolute inset-0 shimmer opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <span className="relative flex items-center justify-center gap-2 text-sm md:text-base">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  {t.downloadMp3}
+                </span>
+              </button>
 
               {/* Share Buttons */}
               <ShareButtons audioUrl={audioUrl} lang={lang} />
