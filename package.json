@@ -14,12 +14,12 @@
     "metrics": "curl http://localhost:3000/api/metrics"
   },
   "dependencies": {
-    "next": "^15.0.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "@ffmpeg/ffmpeg": "^0.12.10",
     "@ffmpeg/core": "^0.12.6",
-    "@ffmpeg/util": "^0.12.1"
+    "@ffmpeg/ffmpeg": "^0.12.10",
+    "@ffmpeg/util": "^0.12.1",
+    "next": "^16.0.8",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.20",
@@ -27,4 +27,3 @@
     "tailwindcss": "^3.4.13"
   }
 }
-
