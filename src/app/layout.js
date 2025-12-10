@@ -3,6 +3,7 @@ import './globals.css'
 import Script from 'next/script'
 import Navigation from '../components/Navigation'
 import Footer from '../components/Footer'
+import { Toaster } from 'react-hot-toast'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -267,6 +268,52 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body className={inter.className}>
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: 'var(--toast-bg)',
+              color: 'var(--toast-color)',
+              borderRadius: '12px',
+              padding: '16px',
+              fontSize: '14px',
+              fontWeight: '500',
+              boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+            },
+            success: {
+              iconTheme: {
+                primary: '#10b981',
+                secondary: '#fff',
+              },
+              style: {
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                color: '#fff',
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: '#ef4444',
+                secondary: '#fff',
+              },
+              style: {
+                background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                color: '#fff',
+              },
+            },
+            loading: {
+              iconTheme: {
+                primary: '#3b82f6',
+                secondary: '#fff',
+              },
+              style: {
+                background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                color: '#fff',
+              },
+            },
+          }}
+        />
         <div className="min-h-screen flex flex-col">
           <div className="flex-1">
             <Navigation />

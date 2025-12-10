@@ -6,6 +6,7 @@ import { fetchFile, toBlobURL } from '@ffmpeg/util';
 import { isValidInstagramReelUrl } from '../lib/ig-scraper';
 import { getAllTranslations } from '../lib/translations';
 import ShareButtons from './ShareButtons';
+import toast from 'react-hot-toast';
 import AdSlot from './AdSlot';
 
 export default function Downloader({ lang = 'en' }) {
@@ -134,6 +135,7 @@ export default function Downloader({ lang = 'en' }) {
       if (process.env.NODE_ENV === 'development') {
         console.log('✅ FFmpeg initialized successfully');
       }
+      // Silent success - don't show toast for background loading
     } catch (err) {
       if (process.env.NODE_ENV === 'development') {
         console.error('❌ Failed to load FFmpeg:', err);
@@ -154,25 +156,28 @@ export default function Downloader({ lang = 'en' }) {
         errorMsg += ' Please check your internet connection, browser console (F12) for details, and try refreshing the page. If the issue persists, try a different browser or check FFMPEG_TROUBLESHOOTING.md for help.';
       }
       
-      setError(errorMsg);
+      toast.error(errorMsg, {
+        duration: 8000,
+      });
+      setError(''); // Clear error state
     }
   };
 
   const handleDownload = async () => {
     if (!url.trim()) {
-      setError(t.invalidUrl);
+      toast.error(t.invalidUrl || 'Please enter a valid Instagram Reels URL');
       return;
     }
 
     if (!isValidInstagramReelUrl(url)) {
-      setError(t.invalidUrl);
+      toast.error(t.invalidUrl || 'Invalid Instagram Reels URL. Please check and try again.');
       return;
     }
 
     // If FFmpeg is not loaded yet, wait for it (but don't block UI)
     if (!ffmpegLoaded || !ffmpeg) {
+      const loadingToast = toast.loading('Initializing audio processor...');
       setLoading(true);
-      setError('Initializing audio processor...');
       // Wait up to 10 seconds for FFmpeg to load
       let attempts = 0;
       const maxAttempts = 20; // 20 * 500ms = 10 seconds
@@ -182,12 +187,15 @@ export default function Downloader({ lang = 'en' }) {
       }
       if (!ffmpegLoaded || !ffmpeg) {
         setLoading(false);
-        setError('Audio processor failed to load. Please refresh the page.');
+        toast.dismiss(loadingToast);
+        toast.error('Audio processor failed to load. Please refresh the page.');
         return;
       }
-      setError('');
+      toast.dismiss(loadingToast);
+      toast.success('Audio processor ready!');
     }
 
+    const processingToast = toast.loading('Processing your request...', { duration: Infinity });
     setLoading(true);
     setError('');
     setAudioUrl(null);
@@ -409,11 +417,23 @@ export default function Downloader({ lang = 'en' }) {
       await ffmpeg.deleteFile('input.mp4');
       await ffmpeg.deleteFile('output.mp3');
 
+      // Success toast
+      toast.dismiss(processingToast);
+      toast.success('🎉 Audio extracted successfully!', {
+        duration: 5000,
+        icon: '🎵',
+      });
+
     } catch (err) {
       if (process.env.NODE_ENV === 'development') {
         console.error('Download error:', err);
       }
-      setError(err.message || 'Failed to download audio. Please try again.');
+      toast.dismiss(processingToast);
+      const errorMessage = err.message || 'Failed to download audio. Please try again.';
+      toast.error(errorMessage, {
+        duration: 6000,
+      });
+      setError(''); // Clear error state since we're using toast
     } finally {
       setLoading(false);
       setProgress(0);
@@ -428,6 +448,9 @@ export default function Downloader({ lang = 'en' }) {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      toast.success('Download started! 🎵', {
+        duration: 3000,
+      });
     }
   };
 
@@ -514,50 +537,9 @@ export default function Downloader({ lang = 'en' }) {
             </div>
           )}
 
-          {/* Error Message */}
-          {error && (
-            <div className="p-5 bg-red-100/90 dark:bg-red-900/40 border-2 border-red-400 dark:border-red-700 text-red-700 dark:text-red-300 rounded-2xl shadow-lg animate-fadeIn backdrop-blur-sm">
-              <div className="flex items-start gap-3">
-                <svg className="w-6 h-6 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-                <div className="flex-1">
-                  <p className="font-bold mb-2">{t.error}: {error}</p>
-                  {error.includes('initialize') && (
-                    <button
-                      onClick={() => {
-                        setError('');
-                        setFfmpegLoaded(false);
-                        loadFFmpeg();
-                      }}
-                      className="mt-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-all"
-                    >
-                      Retry Loading
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Success Section */}
           {audioUrl && audioBlob && (
             <div className="space-y-6 animate-fadeIn">
-              {/* Success Banner */}
-              <div className="relative p-5 bg-gradient-to-r from-green-100 via-emerald-100 to-green-100 dark:from-green-900/40 dark:via-emerald-900/40 dark:to-green-900/40 border-2 border-green-400 dark:border-green-600 text-green-800 dark:text-green-200 rounded-2xl shadow-lg backdrop-blur-sm overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-r from-green-400/20 to-emerald-400/20 animate-pulse"></div>
-                <div className="relative flex items-center gap-3">
-                  <div className="flex-shrink-0">
-                    <svg className="w-7 h-7 animate-bounce" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="font-bold text-lg md:text-xl">{t.success}</p>
-                    <p className="text-sm text-green-700 dark:text-green-300">Audio extracted successfully!</p>
-                  </div>
-                </div>
-              </div>
 
               {/* Audio Player */}
               <div className="glass-card dark:glass-card-dark rounded-2xl p-5 md:p-6 shadow-xl border border-white/10 dark:border-gray-700/30">
