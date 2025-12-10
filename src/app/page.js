@@ -2,16 +2,37 @@
 
 import { useState, useEffect } from 'react';
 import Downloader from '../components/Downloader';
-import { detectLanguage, getAllTranslations } from '../lib/translations';
+import { detectLanguage, getAllTranslations, setLanguage } from '../lib/translations';
 
 export default function Home() {
-  // Detect language synchronously on first render for instant display
-  const [lang] = useState(() => {
+  // Detect language and listen for changes
+  const [lang, setLang] = useState(() => {
     if (typeof window !== 'undefined') {
       return detectLanguage();
     }
     return 'en';
   });
+
+  useEffect(() => {
+    // Listen for language changes from other components
+    const handleLanguageChange = (event) => {
+      setLang(event.detail.lang);
+    };
+    
+    window.addEventListener('languageChanged', handleLanguageChange);
+    
+    // Also check URL params on mount
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlLang = urlParams.get('lang');
+    if (urlLang) {
+      const detected = detectLanguage();
+      setLang(detected);
+    }
+    
+    return () => {
+      window.removeEventListener('languageChanged', handleLanguageChange);
+    };
+  }, []);
 
   return (
     <main className="min-h-screen py-6 md:py-8 px-4 md:px-8 relative z-10">

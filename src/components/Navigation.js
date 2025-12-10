@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, startTransition } from 'react';
 import LanguageSwitcher from './LanguageSwitcher';
-import { detectLanguage, getAllTranslations } from '../lib/translations';
+import { detectLanguage, getAllTranslations, setLanguage } from '../lib/translations';
 
 export default function Navigation() {
   const pathname = usePathname();
@@ -18,6 +18,17 @@ export default function Navigation() {
     setMounted(true);
     const detectedLang = detectLanguage();
     setLang(detectedLang);
+    
+    // Listen for language changes from other components
+    const handleLanguageChange = (event) => {
+      setLang(event.detail.lang);
+    };
+    
+    window.addEventListener('languageChanged', handleLanguageChange);
+    
+    return () => {
+      window.removeEventListener('languageChanged', handleLanguageChange);
+    };
   }, []);
 
   const navLinks = [

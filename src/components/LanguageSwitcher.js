@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { detectLanguage, getAllTranslations } from '../lib/translations';
+import { detectLanguage, getAllTranslations, setLanguage } from '../lib/translations';
 
 const languages = [
   { code: 'hi', name: 'हिंदी', nativeName: 'हिंदी', flag: '🇮🇳' },
@@ -174,6 +174,7 @@ export default function LanguageSwitcher({ currentLang, onLanguageChange }) {
                   <button
                     key={lang.code}
                     onClick={() => {
+                      setLanguage(lang.code);
                       onLanguageChange(lang.code);
                       setIsOpen(false);
                     }}
