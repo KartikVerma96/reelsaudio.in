@@ -54,6 +54,13 @@ next-env.d.ts
 Thumbs.db
 .DS_Store
 
+# Media files
+*.mp4
+*.mp3
+*.avi
+*.mov
+*.mkv
+
 # Docker
 .dockerignore
 
