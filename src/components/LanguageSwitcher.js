@@ -20,7 +20,7 @@ export default function LanguageSwitcher({ currentLang, onLanguageChange }) {
   const dropdownRef = useRef(null);
   const buttonRef = useRef(null);
   const [portalContainer, setPortalContainer] = useState(null);
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
 
   useEffect(() => {
     setMounted(true);
@@ -36,13 +36,29 @@ export default function LanguageSwitcher({ currentLang, onLanguageChange }) {
   }, []);
 
   // Calculate dropdown position when opening
-  useEffect(() => {
-    if (isOpen && buttonRef.current) {
+  const updateDropdownPosition = () => {
+    if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
       setDropdownPosition({
         top: rect.bottom + 12, // mt-3 = 12px
-        right: window.innerWidth - rect.right
+        left: rect.left, // Align with button's left edge
+        width: rect.width // Match button width
       });
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && buttonRef.current) {
+      updateDropdownPosition();
+      
+      // Update position on scroll/resize
+      window.addEventListener('scroll', updateDropdownPosition, true);
+      window.addEventListener('resize', updateDropdownPosition);
+      
+      return () => {
+        window.removeEventListener('scroll', updateDropdownPosition, true);
+        window.removeEventListener('resize', updateDropdownPosition);
+      };
     }
   }, [isOpen]);
 
@@ -147,7 +163,7 @@ export default function LanguageSwitcher({ currentLang, onLanguageChange }) {
               style={{
                 position: 'fixed',
                 top: `${dropdownPosition.top}px`,
-                right: `${dropdownPosition.right}px`,
+                left: `${dropdownPosition.left}px`,
                 zIndex: 50
               }}
             >

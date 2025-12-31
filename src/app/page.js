@@ -38,8 +38,8 @@ export default function Home() {
     <main className="min-h-screen py-6 md:py-8 px-4 md:px-8 relative z-10">
       <div className="max-w-7xl mx-auto">
         {/* SEO: Main Content Section */}
-        <section aria-label="Instagram Reels Audio Downloader Tool">
-          <h2 className="sr-only">Download Instagram Reels Audio as MP3 - Free Online Tool</h2>
+        <section aria-label="Reels and Shorts Audio & Video Downloader Tool">
+          <h2 className="sr-only">Download Audio & Video from Instagram Reels, Facebook Reels, and YouTube Shorts - Free Online Tool</h2>
           
           {/* Main Downloader */}
           <Downloader lang={lang} />
