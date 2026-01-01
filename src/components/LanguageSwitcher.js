@@ -20,7 +20,7 @@ export default function LanguageSwitcher({ currentLang, onLanguageChange }) {
   const dropdownRef = useRef(null);
   const buttonRef = useRef(null);
   const [portalContainer, setPortalContainer] = useState(null);
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
 
   useEffect(() => {
     setMounted(true);
@@ -39,10 +39,24 @@ export default function LanguageSwitcher({ currentLang, onLanguageChange }) {
   const updateDropdownPosition = () => {
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
+      const dropdownWidth = 300; // max-w-[300px] from className
+      const viewportWidth = window.innerWidth;
+      const spacing = 12; // Gap between button and dropdown
+      const margin = 16; // Minimum margin from viewport edge
+      
+      // Calculate right position to align dropdown's right edge with button's right edge
+      let right = viewportWidth - rect.right;
+      
+      // Check if dropdown would overflow on the left side
+      const leftPosition = rect.right - dropdownWidth;
+      if (leftPosition < margin) {
+        // If it would overflow, shift it right to stay within viewport
+        right = viewportWidth - margin - dropdownWidth;
+      }
+      
       setDropdownPosition({
-        top: rect.bottom + 12, // mt-3 = 12px
-        left: rect.left, // Align with button's left edge
-        width: rect.width // Match button width
+        top: rect.bottom + spacing,
+        right: right
       });
     }
   };
@@ -163,7 +177,7 @@ export default function LanguageSwitcher({ currentLang, onLanguageChange }) {
               style={{
                 position: 'fixed',
                 top: `${dropdownPosition.top}px`,
-                left: `${dropdownPosition.left}px`,
+                right: `${dropdownPosition.right}px`,
                 zIndex: 50
               }}
             >
