@@ -99,7 +99,7 @@ export async function POST(request) {
           // Reduce timeout to 8 seconds for faster failure
           const audioResult = await Promise.race([
             execAsync(
-              `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub -f "bestaudio[ext=m4a]/bestaudio/best" "${url}"`,
+              `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -f "bestaudio[ext=m4a]/bestaudio/best" "${url}"`,
               { timeout: 8000, maxBuffer: 256 * 1024 } // 8 second timeout, 256KB buffer
             ),
             new Promise((_, reject) => 
@@ -134,7 +134,7 @@ export async function POST(request) {
           // Try to get any audio URL available, including HLS
           const fallbackResult = await Promise.race([
             execAsync(
-              `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir -f "bestaudio/best" "${url}"`,
+              `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -f "bestaudio/best" "${url}"`,
               { timeout: 5000, maxBuffer: 256 * 1024 } // 5 second timeout
             ),
             new Promise((_, reject) => 
@@ -183,7 +183,7 @@ export async function POST(request) {
           // Reduce timeout to 8 seconds for faster failure
           const videoResult = await Promise.race([
             execAsync(
-              `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub -f "${formatSelector}" "${url}"`,
+              `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -f "${formatSelector}" "${url}"`,
               { timeout: 8000, maxBuffer: 256 * 1024 } // 8 second timeout, 256KB buffer
             ),
             new Promise((_, reject) => 
@@ -223,7 +223,7 @@ export async function POST(request) {
         try {
           // Set timeout for yt-dlp (90 seconds max for video)
           const downloadPromise = execAsync(
-            `"${ytDlpPath}" -f "${formatSelector}" --recode-video mp4 --no-progress -o "${tempFile}" "${url}"`,
+            `"${ytDlpPath}" -f "${formatSelector}" --recode-video mp4 --no-progress --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -o "${tempFile}" "${url}"`,
             { timeout: 90000, maxBuffer: 10 * 1024 * 1024 } // 90 second timeout, 10MB buffer
           );
           
@@ -249,7 +249,7 @@ export async function POST(request) {
           let videoInfo = {};
           try {
             const { stdout: infoStdout } = await execAsync(
-              `"${ytDlpPath}" -j --no-playlist "${url}"`,
+              `"${ytDlpPath}" -j --no-playlist --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" "${url}"`,
               { timeout: 10000 } // 10 second timeout for info
             );
             videoInfo = JSON.parse(infoStdout);
@@ -329,7 +329,7 @@ export async function GET(request) {
 
     // Get available formats
     const { stdout } = await execAsync(
-      `"${ytDlpPath}" -j --no-playlist "${url}"`
+      `"${ytDlpPath}" -j --no-playlist --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" "${url}"`
     );
     
     const info = JSON.parse(stdout);

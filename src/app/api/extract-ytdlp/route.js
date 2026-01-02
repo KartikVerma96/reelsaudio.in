@@ -56,7 +56,7 @@ export async function POST(request) {
 
     try {
       // Use yt-dlp to get video URL (best quality)
-      const { stdout } = await execAsync(`"${ytDlpPath}" -g -f "best[ext=mp4]/best" "${url}"`);
+      const { stdout } = await execAsync(`"${ytDlpPath}" -g --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -f "best[ext=mp4]/best" "${url}"`);
       const videoUrl = stdout.trim().split('\n')[0]; // Get first URL (video, not audio)
       
       if (!videoUrl || !videoUrl.startsWith('http')) {
