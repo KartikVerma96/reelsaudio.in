@@ -179,8 +179,41 @@ export async function POST(request) {
           // Fallback extraction failed
         }
         
-        // If all URL extraction methods fail, return error instead of trying server-side download
-        // Server-side download requires ffmpeg which may not be available
+        // If all URL extraction methods fail, try to get video URL and extract audio server-side
+        // This works even when audio formats are not directly available
+        try {
+          const cookiesFlag = getCookiesFlag();
+          // Try to get video URL (video formats are often more available)
+          const videoUrlResult = await Promise.race([
+            execAsync(
+              `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir ${cookiesFlag} --extractor-args "youtube:player_client=ios" --user-agent "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -f "best[height<=720]/best" "${url}"`,
+              { timeout: 15000, maxBuffer: 512 * 1024 }
+            ),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Video URL extraction timeout')), 15000)
+            )
+          ]).catch(() => ({ stdout: '' }));
+          
+          const videoUrl = videoUrlResult.stdout.trim().split('\n')[0];
+          
+          if (videoUrl && videoUrl.startsWith('http')) {
+            // Return video URL - client can extract audio using FFmpeg.wasm
+            return NextResponse.json({
+              success: true,
+              audioUrl: null,
+              videoUrl: videoUrl,
+              format: 'mp3',
+              title: 'Audio',
+              duration: null,
+              thumbnail: null,
+              extractAudioFromVideo: true, // Flag to tell client to extract audio
+            });
+          }
+        } catch (videoUrlError) {
+          // Video URL extraction also failed
+        }
+        
+        // If all extraction methods fail, return error
         throw new Error('Could not extract audio URL. The video may be unavailable, private, or region-restricted. Please try a different video or check if the URL is correct.');
       } else {
         // For video, first try to get direct URL (faster)
