@@ -82,17 +82,23 @@ export async function POST(request) {
         // Only use server-side download if it's HLS or direct URL fails
         try {
           // Ultra-fast extraction with minimal processing
-          // Use --skip-download, --print, and --no-download to avoid any file operations
-          // Reduce timeout to 8 seconds for faster failure
+          // Use YouTube web client to bypass bot detection
+          // Increase timeout to 15 seconds for YouTube
           const audioResult = await Promise.race([
             execAsync(
-              `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -f "bestaudio[ext=m4a]/bestaudio/best" "${url}"`,
-              { timeout: 8000, maxBuffer: 256 * 1024 } // 8 second timeout, 256KB buffer
+              `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub --extractor-args "youtube:player_client=web" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -f "bestaudio[ext=m4a]/bestaudio/best" "${url}"`,
+              { timeout: 15000, maxBuffer: 512 * 1024 } // 15 second timeout, 512KB buffer
             ),
             new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Extraction timeout')), 8000)
+              setTimeout(() => reject(new Error('Extraction timeout')), 15000)
             )
-          ]).catch(() => ({ stdout: '' }));
+          ]).catch((error) => {
+            // Log error for debugging
+            if (process.env.NODE_ENV === 'development') {
+              console.error('Audio extraction error:', error.message);
+            }
+            return { stdout: '' };
+          });
           
           audioUrl = audioResult.stdout.trim().split('\n')[0];
           
@@ -118,16 +124,22 @@ export async function POST(request) {
         // HLS or URL extraction failed - try alternative extraction methods
         // First, try to get the best available audio URL (even if it's HLS)
         try {
-          // Try to get any audio URL available, including HLS
+          // Try Android client as fallback (often works better for YouTube)
           const fallbackResult = await Promise.race([
             execAsync(
-              `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -f "bestaudio/best" "${url}"`,
-              { timeout: 5000, maxBuffer: 256 * 1024 } // 5 second timeout
+              `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --extractor-args "youtube:player_client=android" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -f "bestaudio/best" "${url}"`,
+              { timeout: 10000, maxBuffer: 512 * 1024 } // 10 second timeout
             ),
             new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Fallback timeout')), 5000)
+              setTimeout(() => reject(new Error('Fallback timeout')), 10000)
             )
-          ]).catch(() => ({ stdout: '' }));
+          ]).catch((error) => {
+            // Log error for debugging
+            if (process.env.NODE_ENV === 'development') {
+              console.error('Fallback extraction error:', error.message);
+            }
+            return { stdout: '' };
+          });
           
           const fallbackUrl = fallbackResult.stdout.trim().split('\n')[0];
           
