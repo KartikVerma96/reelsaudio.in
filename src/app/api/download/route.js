@@ -71,19 +71,6 @@ export async function POST(request) {
       );
     }
 
-    if (!ytDlpAvailable) {
-      // For serverless environments (like Vercel), yt-dlp won't work
-      // Return error with suggestion to use client-side extraction
-      return NextResponse.json(
-        {
-          error: 'yt-dlp is not available on this server. Video downloads require yt-dlp.',
-          fallback: true,
-          note: 'For production, consider using a VPS or dedicated server with yt-dlp installed, or use client-side extraction for audio-only downloads.'
-        },
-        { status: 503 }
-      );
-    }
-
     try {
       let command;
       let videoUrl;
