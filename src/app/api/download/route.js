@@ -80,32 +80,42 @@ export async function POST(request) {
       if (format === 'mp3' || format === 'audio') {
         // First, try to get direct audio URL (faster)
         // Only use server-side download if it's HLS or direct URL fails
-        try {
-          // Ultra-fast extraction with minimal processing
-          // Use YouTube web client to bypass bot detection
-          // Increase timeout to 15 seconds for YouTube
-          const audioResult = await Promise.race([
-            execAsync(
-              `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub --extractor-args "youtube:player_client=web" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -f "bestaudio[ext=m4a]/bestaudio/best" "${url}"`,
-              { timeout: 15000, maxBuffer: 512 * 1024 } // 15 second timeout, 512KB buffer
-            ),
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Extraction timeout')), 15000)
-            )
-          ]).catch((error) => {
-            // Log error for debugging
-            if (process.env.NODE_ENV === 'development') {
-              console.error('Audio extraction error:', error.message);
+        // Try multiple YouTube player clients to bypass bot detection
+        const playerClients = ['ios', 'android', 'web', 'tv_embedded'];
+        let audioUrl = null;
+        
+        for (const client of playerClients) {
+          try {
+            const audioResult = await Promise.race([
+              execAsync(
+                `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub --extractor-args "youtube:player_client=${client}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -f "bestaudio[ext=m4a]/bestaudio/best" "${url}"`,
+                { timeout: 12000, maxBuffer: 512 * 1024 } // 12 second timeout per attempt
+              ),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Extraction timeout')), 12000)
+              )
+            ]).catch((error) => {
+              // Try next client
+              return { stdout: '' };
+            });
+            
+            audioUrl = audioResult.stdout.trim().split('\n')[0];
+            
+            // If we got a valid URL, break out of loop
+            if (audioUrl && audioUrl.startsWith('http') && !audioUrl.includes('.m3u8')) {
+              break;
             }
-            return { stdout: '' };
-          });
+          } catch (clientError) {
+            // Try next client
+            continue;
+          }
+        }
           
-          audioUrl = audioResult.stdout.trim().split('\n')[0];
+        // If we got a valid URL from any client, return it
+        if (audioUrl && audioUrl.startsWith('http')) {
+          const isHLS = audioUrl.includes('.m3u8');
           
-          // Check if it's HLS - if so, we need server-side download
-          const isHLS = audioUrl && audioUrl.includes('.m3u8');
-          
-          if (!isHLS && audioUrl && audioUrl.startsWith('http')) {
+          if (!isHLS) {
             // Return immediately - don't wait for anything else
             return NextResponse.json({
               success: true,
@@ -117,27 +127,22 @@ export async function POST(request) {
               thumbnail: null,
             });
           }
-        } catch (urlError) {
-          // URL extraction failed, will try server-side download
+          // If HLS, continue to fallback methods
         }
         
-        // HLS or URL extraction failed - try alternative extraction methods
-        // First, try to get the best available audio URL (even if it's HLS)
+        // If all player clients failed, try fallback methods
         try {
-          // Try Android client as fallback (often works better for YouTube)
+        
+          // Try simpler format selector without player client args
           const fallbackResult = await Promise.race([
             execAsync(
-              `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --extractor-args "youtube:player_client=android" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -f "bestaudio/best" "${url}"`,
+              `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --user-agent "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -f "bestaudio/best" "${url}"`,
               { timeout: 10000, maxBuffer: 512 * 1024 } // 10 second timeout
             ),
             new Promise((_, reject) => 
               setTimeout(() => reject(new Error('Fallback timeout')), 10000)
             )
           ]).catch((error) => {
-            // Log error for debugging
-            if (process.env.NODE_ENV === 'development') {
-              console.error('Fallback extraction error:', error.message);
-            }
             return { stdout: '' };
           });
           
