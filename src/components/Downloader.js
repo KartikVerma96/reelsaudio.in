@@ -472,6 +472,86 @@ export default function Downloader({ lang = 'en' }) {
           console.log('Audio API response:', data);
         }
         
+        // Check if we need to extract audio from video URL
+        if (data.extractAudioFromVideo && data.videoUrl) {
+          // Use video URL and extract audio client-side with FFmpeg
+          toast.loading('Extracting audio from video...', { id: processingToast });
+          
+          if (!ffmpegLoaded || !ffmpeg) {
+            // Wait for FFmpeg to load
+            let attempts = 0;
+            const maxAttempts = 20;
+            while (!ffmpegLoaded && attempts < maxAttempts) {
+              await new Promise(resolve => setTimeout(resolve, 500));
+              attempts++;
+            }
+            if (!ffmpegLoaded || !ffmpeg) {
+              throw new Error('FFmpeg is not loaded. Please refresh the page and try again.');
+            }
+          }
+          
+          // Download video and extract audio
+          const videoResponse = await fetch('/api/proxy-video', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ videoUrl: data.videoUrl }),
+          });
+          
+          if (!videoResponse.ok) {
+            throw new Error('Failed to download video for audio extraction');
+          }
+          
+          const videoBlobData = await videoResponse.blob();
+          
+          if (videoBlobData.size === 0) {
+            throw new Error('Downloaded video file is empty');
+          }
+          
+          // Convert blob to Uint8Array for FFmpeg
+          const arrayBuffer = await videoBlobData.arrayBuffer();
+          const videoData = new Uint8Array(arrayBuffer);
+          
+          // Extract audio using FFmpeg
+          toast.loading('Converting video to audio...', { id: processingToast });
+          
+          // Write video to FFmpeg filesystem
+          await ffmpeg.writeFile('input.mp4', videoData);
+          
+          // Extract audio using FFmpeg
+          await ffmpeg.exec([
+            '-i', 'input.mp4',
+            '-vn',
+            '-acodec', 'libmp3lame',
+            '-ab', '192k',
+            '-ar', '44100',
+            '-y',
+            'output.mp3'
+          ]);
+          
+          // Read audio file
+          const audioData = await ffmpeg.readFile('output.mp3');
+          
+          // Create blob and URL
+          const audioBlobData = new Blob([audioData], { type: 'audio/mpeg' });
+          const audioBlobUrl = URL.createObjectURL(audioBlobData);
+          
+          // Cleanup
+          await ffmpeg.deleteFile('input.mp4');
+          await ffmpeg.deleteFile('output.mp3');
+          
+          setAudioBlob(audioBlobData);
+          setAudioUrl(audioBlobUrl);
+          
+          toast.dismiss(processingToast);
+          toast.success('Audio ready for download!', {
+            duration: 5000,
+            icon: <AudioIcon />,
+          });
+          return;
+        }
+        
         if (!data.audioUrl) {
           throw new Error('Audio URL not found in response');
         }
