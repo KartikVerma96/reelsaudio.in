@@ -8,6 +8,31 @@ import path from 'path';
 const execAsync = promisify(exec);
 
 /**
+ * Find yt-dlp executable path
+ * Tries common locations where yt-dlp might be installed
+ */
+async function findYtDlp() {
+  const possiblePaths = [
+    'yt-dlp', // In PATH
+    '/root/.local/bin/yt-dlp', // pipx default location
+    '/usr/local/bin/yt-dlp',
+    '/usr/bin/yt-dlp',
+    '~/.local/bin/yt-dlp',
+  ];
+
+  for (const ytDlpPath of possiblePaths) {
+    try {
+      await execAsync(`${ytDlpPath} --version`, { timeout: 3000 });
+      return ytDlpPath;
+    } catch (error) {
+      // Try next path
+      continue;
+    }
+  }
+  return null;
+}
+
+/**
  * Unified download API route
  * Supports: Instagram Reels, Facebook Reels, YouTube Shorts
  * Formats: MP3 (audio), MP4 (video with quality options)
@@ -32,14 +57,18 @@ export async function POST(request) {
       );
     }
 
-    // Check if yt-dlp is available
-    let ytDlpAvailable = false;
-    try {
-      await execAsync('yt-dlp --version');
-      ytDlpAvailable = true;
-    } catch (error) {
-      // yt-dlp not available - will use fallback methods
-      ytDlpAvailable = false;
+    // Find yt-dlp executable
+    const ytDlpPath = await findYtDlp();
+    
+    if (!ytDlpPath) {
+      return NextResponse.json(
+        {
+          error: 'yt-dlp is not available on this server. Video downloads require yt-dlp.',
+          fallback: true,
+          note: 'Please ensure yt-dlp is installed and accessible. Check: which yt-dlp'
+        },
+        { status: 503 }
+      );
     }
 
     if (!ytDlpAvailable) {
@@ -70,7 +99,7 @@ export async function POST(request) {
           // Reduce timeout to 8 seconds for faster failure
           const audioResult = await Promise.race([
             execAsync(
-              `yt-dlp -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub -f "bestaudio[ext=m4a]/bestaudio/best" "${url}"`,
+              `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub -f "bestaudio[ext=m4a]/bestaudio/best" "${url}"`,
               { timeout: 8000, maxBuffer: 256 * 1024 } // 8 second timeout, 256KB buffer
             ),
             new Promise((_, reject) => 
@@ -105,7 +134,7 @@ export async function POST(request) {
           // Try to get any audio URL available, including HLS
           const fallbackResult = await Promise.race([
             execAsync(
-              `yt-dlp -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir -f "bestaudio/best" "${url}"`,
+              `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir -f "bestaudio/best" "${url}"`,
               { timeout: 5000, maxBuffer: 256 * 1024 } // 5 second timeout
             ),
             new Promise((_, reject) => 
@@ -154,7 +183,7 @@ export async function POST(request) {
           // Reduce timeout to 8 seconds for faster failure
           const videoResult = await Promise.race([
             execAsync(
-              `yt-dlp -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub -f "${formatSelector}" "${url}"`,
+              `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub -f "${formatSelector}" "${url}"`,
               { timeout: 8000, maxBuffer: 256 * 1024 } // 8 second timeout, 256KB buffer
             ),
             new Promise((_, reject) => 
@@ -194,7 +223,7 @@ export async function POST(request) {
         try {
           // Set timeout for yt-dlp (90 seconds max for video)
           const downloadPromise = execAsync(
-            `yt-dlp -f "${formatSelector}" --recode-video mp4 --no-progress -o "${tempFile}" "${url}"`,
+            `"${ytDlpPath}" -f "${formatSelector}" --recode-video mp4 --no-progress -o "${tempFile}" "${url}"`,
             { timeout: 90000, maxBuffer: 10 * 1024 * 1024 } // 90 second timeout, 10MB buffer
           );
           
@@ -220,7 +249,7 @@ export async function POST(request) {
           let videoInfo = {};
           try {
             const { stdout: infoStdout } = await execAsync(
-              `yt-dlp -j --no-playlist "${url}"`,
+              `"${ytDlpPath}" -j --no-playlist "${url}"`,
               { timeout: 10000 } // 10 second timeout for info
             );
             videoInfo = JSON.parse(infoStdout);
@@ -285,12 +314,10 @@ export async function GET(request) {
   }
 
   try {
-    // Check if yt-dlp is available
-    let ytDlpAvailable = false;
-    try {
-      await execAsync('yt-dlp --version');
-      ytDlpAvailable = true;
-    } catch (error) {
+    // Find yt-dlp executable
+    const ytDlpPath = await findYtDlp();
+    
+    if (!ytDlpPath) {
       return NextResponse.json(
         {
           error: 'yt-dlp is not available',
@@ -302,7 +329,7 @@ export async function GET(request) {
 
     // Get available formats
     const { stdout } = await execAsync(
-      `yt-dlp -j --no-playlist "${url}"`
+      `"${ytDlpPath}" -j --no-playlist "${url}"`
     );
     
     const info = JSON.parse(stdout);

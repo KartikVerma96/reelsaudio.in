@@ -4,6 +4,31 @@ import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
+/**
+ * Find yt-dlp executable path
+ * Tries common locations where yt-dlp might be installed
+ */
+async function findYtDlp() {
+  const possiblePaths = [
+    'yt-dlp', // In PATH
+    '/root/.local/bin/yt-dlp', // pipx default location
+    '/usr/local/bin/yt-dlp',
+    '/usr/bin/yt-dlp',
+    '~/.local/bin/yt-dlp',
+  ];
+
+  for (const ytDlpPath of possiblePaths) {
+    try {
+      await execAsync(`${ytDlpPath} --version`, { timeout: 3000 });
+      return ytDlpPath;
+    } catch (error) {
+      // Try next path
+      continue;
+    }
+  }
+  return null;
+}
+
 export async function POST(request) {
   try {
     const { url } = await request.json();
@@ -15,13 +40,10 @@ export async function POST(request) {
       );
     }
 
-    // Check if yt-dlp is available
-    // Note: yt-dlp will NOT work on Vercel serverless functions
-    // It requires Python and system binaries which aren't available in serverless
-    // This route will gracefully fail and the app will use primary scraping methods
-    try {
-      await execAsync('yt-dlp --version');
-    } catch (error) {
+    // Find yt-dlp executable
+    const ytDlpPath = await findYtDlp();
+    
+    if (!ytDlpPath) {
       return NextResponse.json(
         { 
           error: 'yt-dlp is not available. On Vercel serverless, yt-dlp cannot be used. The app will use primary scraping methods instead.',
@@ -34,7 +56,7 @@ export async function POST(request) {
 
     try {
       // Use yt-dlp to get video URL (best quality)
-      const { stdout } = await execAsync(`yt-dlp -g -f "best[ext=mp4]/best" "${url}"`);
+      const { stdout } = await execAsync(`"${ytDlpPath}" -g -f "best[ext=mp4]/best" "${url}"`);
       const videoUrl = stdout.trim().split('\n')[0]; // Get first URL (video, not audio)
       
       if (!videoUrl || !videoUrl.startsWith('http')) {
