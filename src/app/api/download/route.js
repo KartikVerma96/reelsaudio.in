@@ -8,6 +8,17 @@ import path from 'path';
 const execAsync = promisify(exec);
 
 /**
+ * Check if cookies file exists and return cookie flag
+ */
+function getCookiesFlag() {
+  const cookiesPath = path.join(process.cwd(), 'cookies.txt');
+  if (fs.existsSync(cookiesPath)) {
+    return `--cookies "${cookiesPath}"`;
+  }
+  return '';
+}
+
+/**
  * Find yt-dlp executable path
  * Tries common locations where yt-dlp might be installed
  */
@@ -84,11 +95,13 @@ export async function POST(request) {
         const playerClients = ['ios', 'android', 'web', 'tv_embedded'];
         let audioUrl = null;
         
+        const cookiesFlag = getCookiesFlag();
+        
         for (const client of playerClients) {
           try {
             const audioResult = await Promise.race([
               execAsync(
-                `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub --extractor-args "youtube:player_client=${client}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -f "bestaudio[ext=m4a]/bestaudio/best" "${url}"`,
+                `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub ${cookiesFlag} --extractor-args "youtube:player_client=${client}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -f "bestaudio[ext=m4a]/bestaudio/best" "${url}"`,
                 { timeout: 12000, maxBuffer: 512 * 1024 } // 12 second timeout per attempt
               ),
               new Promise((_, reject) => 
@@ -134,9 +147,10 @@ export async function POST(request) {
         try {
         
           // Try simpler format selector without player client args
+          const cookiesFlag = getCookiesFlag();
           const fallbackResult = await Promise.race([
             execAsync(
-              `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --user-agent "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -f "bestaudio/best" "${url}"`,
+              `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir ${cookiesFlag} --user-agent "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -f "bestaudio/best" "${url}"`,
               { timeout: 10000, maxBuffer: 512 * 1024 } // 10 second timeout
             ),
             new Promise((_, reject) => 
@@ -185,9 +199,10 @@ export async function POST(request) {
           // Ultra-fast extraction with minimal processing
           // Use --skip-download and other flags to avoid any file operations
           // Reduce timeout to 8 seconds for faster failure
+          const cookiesFlag = getCookiesFlag();
           const videoResult = await Promise.race([
             execAsync(
-              `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -f "${formatSelector}" "${url}"`,
+              `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub ${cookiesFlag} --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -f "${formatSelector}" "${url}"`,
               { timeout: 8000, maxBuffer: 256 * 1024 } // 8 second timeout, 256KB buffer
             ),
             new Promise((_, reject) => 
@@ -226,8 +241,9 @@ export async function POST(request) {
         
         try {
           // Set timeout for yt-dlp (90 seconds max for video)
+          const cookiesFlag = getCookiesFlag();
           const downloadPromise = execAsync(
-            `"${ytDlpPath}" -f "${formatSelector}" --recode-video mp4 --no-progress --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -o "${tempFile}" "${url}"`,
+            `"${ytDlpPath}" -f "${formatSelector}" --recode-video mp4 --no-progress ${cookiesFlag} --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -o "${tempFile}" "${url}"`,
             { timeout: 90000, maxBuffer: 10 * 1024 * 1024 } // 90 second timeout, 10MB buffer
           );
           
@@ -252,8 +268,9 @@ export async function POST(request) {
           // Get video info (don't wait if it fails)
           let videoInfo = {};
           try {
+            const cookiesFlag = getCookiesFlag();
             const { stdout: infoStdout } = await execAsync(
-              `"${ytDlpPath}" -j --no-playlist --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" "${url}"`,
+              `"${ytDlpPath}" -j --no-playlist ${cookiesFlag} --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" "${url}"`,
               { timeout: 10000 } // 10 second timeout for info
             );
             videoInfo = JSON.parse(infoStdout);
@@ -332,8 +349,9 @@ export async function GET(request) {
     }
 
     // Get available formats
+    const cookiesFlag = getCookiesFlag();
     const { stdout } = await execAsync(
-      `"${ytDlpPath}" -j --no-playlist --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" "${url}"`
+      `"${ytDlpPath}" -j --no-playlist ${cookiesFlag} --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" "${url}"`
     );
     
     const info = JSON.parse(stdout);
