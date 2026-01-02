@@ -181,36 +181,52 @@ export async function POST(request) {
         
         // If all URL extraction methods fail, try to get video URL and extract audio server-side
         // This works even when audio formats are not directly available
-        try {
-          const cookiesFlag = getCookiesFlag();
-          // Try to get video URL (video formats are often more available)
-          const videoUrlResult = await Promise.race([
-            execAsync(
-              `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir ${cookiesFlag} --extractor-args "youtube:player_client=ios" --user-agent "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -f "best[height<=720]/best" "${url}"`,
-              { timeout: 15000, maxBuffer: 512 * 1024 }
-            ),
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Video URL extraction timeout')), 15000)
-            )
-          ]).catch(() => ({ stdout: '' }));
+        // Try multiple video format selectors and player clients
+        const videoFormatSelectors = ['best[height<=720]/best', 'best[height<=480]/best', 'worst'];
+        const videoClients = ['ios', 'android', 'web'];
+        let videoUrl = null;
+        
+        for (const client of videoClients) {
+          if (videoUrl) break; // If we got a URL, stop trying
           
-          const videoUrl = videoUrlResult.stdout.trim().split('\n')[0];
-          
-          if (videoUrl && videoUrl.startsWith('http')) {
-            // Return video URL - client can extract audio using FFmpeg.wasm
-            return NextResponse.json({
-              success: true,
-              audioUrl: null,
-              videoUrl: videoUrl,
-              format: 'mp3',
-              title: 'Audio',
-              duration: null,
-              thumbnail: null,
-              extractAudioFromVideo: true, // Flag to tell client to extract audio
-            });
+          for (const formatSelector of videoFormatSelectors) {
+            try {
+              const cookiesFlag = getCookiesFlag();
+              const videoUrlResult = await Promise.race([
+                execAsync(
+                  `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir ${cookiesFlag} --extractor-args "youtube:player_client=${client}" --user-agent "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -f "${formatSelector}" "${url}"`,
+                  { timeout: 12000, maxBuffer: 512 * 1024 }
+                ),
+                new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error('Video URL extraction timeout')), 12000)
+                )
+              ]).catch(() => ({ stdout: '' }));
+              
+              const extractedUrl = videoUrlResult.stdout.trim().split('\n')[0];
+              
+              if (extractedUrl && extractedUrl.startsWith('http') && !extractedUrl.includes('.m3u8')) {
+                videoUrl = extractedUrl;
+                break; // Found a valid URL
+              }
+            } catch (formatError) {
+              // Try next format selector
+              continue;
+            }
           }
-        } catch (videoUrlError) {
-          // Video URL extraction also failed
+        }
+        
+        if (videoUrl) {
+          // Return video URL - client can extract audio using FFmpeg.wasm
+          return NextResponse.json({
+            success: true,
+            audioUrl: null,
+            videoUrl: videoUrl,
+            format: 'mp3',
+            title: 'Audio',
+            duration: null,
+            thumbnail: null,
+            extractAudioFromVideo: true, // Flag to tell client to extract audio
+          });
         }
         
         // If all extraction methods fail, return error
