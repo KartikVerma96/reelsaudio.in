@@ -68,9 +68,8 @@ async function getNodePath() {
 
 /**
  * Build yt-dlp command with JS runtime and anti-bot headers
- * @param {boolean} simpleMode - If true, use minimal headers (matches direct test that worked)
  */
-async function buildYtDlpCommand(ytDlpPath, baseArgs, url, simpleMode = false) {
+async function buildYtDlpCommand(ytDlpPath, baseArgs, url) {
   const nodePath = await getNodePath();
   // Always try to use JS runtime if Node.js is available
   const jsRuntimeFlag = nodePath ? `--js-runtimes node:${nodePath}` : '';
@@ -78,13 +77,7 @@ async function buildYtDlpCommand(ytDlpPath, baseArgs, url, simpleMode = false) {
   // Get cookies flag if cookies.txt exists
   const cookiesFlag = getCookiesFlag();
   
-  if (simpleMode) {
-    // Simple mode: minimal headers (matches direct test that worked)
-    const command = `"${ytDlpPath}" ${jsRuntimeFlag} ${cookiesFlag} ${baseArgs} "${url}"`;
-    return command;
-  }
-  
-  // Full mode: use consistent mobile user agent (iOS works best with YouTube)
+  // Use consistent mobile user agent (iOS works best with YouTube)
   const userAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
   
   const command = `"${ytDlpPath}" ${jsRuntimeFlag} ${cookiesFlag} ${baseArgs} --user-agent "${userAgent}" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" --add-header "Accept:text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" --add-header "Accept-Encoding:gzip, deflate, br" --add-header "DNT:1" --add-header "Connection:keep-alive" --add-header "Upgrade-Insecure-Requests:1" "${url}"`;
@@ -177,10 +170,9 @@ export async function POST(request) {
         let lastError = null;
         
         // FIRST: Try simple approach without player client args (this worked in direct test)
-        // Use simpleMode=true to match the exact command that worked in direct test
         try {
           const baseArgs = `-g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir -f "bestaudio/best"`;
-          const command = await buildYtDlpCommand(ytDlpPath, baseArgs, url, true); // simpleMode=true
+          const command = await buildYtDlpCommand(ytDlpPath, baseArgs, url);
           
           const simpleResult = await Promise.race([
             execAsync(command, { timeout: 20000, maxBuffer: 1024 * 1024 }),
