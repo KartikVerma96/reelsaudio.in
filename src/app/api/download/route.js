@@ -8,6 +8,17 @@ import path from 'path';
 const execAsync = promisify(exec);
 
 /**
+ * Check if cookies file exists and return cookie flag
+ */
+function getCookiesFlag() {
+  const cookiesPath = path.join(process.cwd(), 'cookies.txt');
+  if (fs.existsSync(cookiesPath)) {
+    return `--cookies "${cookiesPath}"`;
+  }
+  return '';
+}
+
+/**
  * Get Node.js path for JS runtime
  * Tries multiple common locations
  */
@@ -46,14 +57,17 @@ async function buildYtDlpCommand(ytDlpPath, baseArgs, url) {
   // Always try to use JS runtime if Node.js is available
   const jsRuntimeFlag = nodePath ? `--js-runtimes node:${nodePath}` : '';
   
+  // Get cookies flag if cookies.txt exists
+  const cookiesFlag = getCookiesFlag();
+  
   // Use consistent mobile user agent (iOS works best with YouTube)
   const userAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
   
-  const command = `"${ytDlpPath}" ${jsRuntimeFlag} ${baseArgs} --user-agent "${userAgent}" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" --add-header "Accept:text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" --add-header "Accept-Encoding:gzip, deflate, br" --add-header "DNT:1" --add-header "Connection:keep-alive" --add-header "Upgrade-Insecure-Requests:1" "${url}"`;
+  const command = `"${ytDlpPath}" ${jsRuntimeFlag} ${cookiesFlag} ${baseArgs} --user-agent "${userAgent}" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" --add-header "Accept:text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" --add-header "Accept-Encoding:gzip, deflate, br" --add-header "DNT:1" --add-header "Connection:keep-alive" --add-header "Upgrade-Insecure-Requests:1" "${url}"`;
   
   // Log command in development (without sensitive info)
   if (process.env.NODE_ENV === 'development') {
-    console.log('yt-dlp command:', command.replace(/--js-runtimes[^"]+/, '--js-runtimes [HIDDEN]'));
+    console.log('yt-dlp command:', command.replace(/--js-runtimes[^"]+/, '--js-runtimes [HIDDEN]').replace(/--cookies[^"]+/, '--cookies [HIDDEN]'));
   }
   
   return command;
