@@ -230,8 +230,8 @@ export async function POST(request) {
               console.log(`Successfully extracted audio URL using client ${client}`);
             }
             
-            // If we got a valid URL, break out of loop
-            if (audioUrl && audioUrl.startsWith('http') && !audioUrl.includes('.m3u8')) {
+            // If we got a valid URL (including HLS), break out of loop
+            if (audioUrl && audioUrl.startsWith('http')) {
               break;
             }
           } catch (clientError) {
@@ -241,23 +241,22 @@ export async function POST(request) {
           }
         }
           
-        // If we got a valid URL from any client, return it
+        // If we got a valid URL from any client, return it (even if HLS)
         if (audioUrl && audioUrl.startsWith('http')) {
           const isHLS = audioUrl.includes('.m3u8');
           
-          if (!isHLS) {
-            // Return immediately - don't wait for anything else
-            return NextResponse.json({
-              success: true,
-              audioUrl,
-              videoUrl: null,
-              format: 'mp3',
-              title: 'Audio',
-              duration: null,
-              thumbnail: null,
-            });
-          }
-          // If HLS, continue to fallback methods
+          // Return HLS URLs too - client can handle them or we'll extract video URL
+          return NextResponse.json({
+            success: true,
+            audioUrl: isHLS ? null : audioUrl, // Don't return HLS as audioUrl
+            videoUrl: isHLS ? audioUrl : null, // Return HLS as videoUrl for client-side extraction
+            format: 'mp3',
+            title: 'Audio',
+            duration: null,
+            thumbnail: null,
+            extractAudioFromVideo: isHLS, // Flag to extract audio from HLS video
+            isHLS: isHLS,
+          });
         }
         
         // If all player clients failed, try simpler approach without player client args
@@ -359,7 +358,8 @@ export async function POST(request) {
                 console.log(`Successfully extracted video URL using client ${client}, format ${formatSelector}`);
               }
               
-              if (extractedUrl && extractedUrl.startsWith('http') && !extractedUrl.includes('.m3u8')) {
+              // Accept HLS URLs too - client can extract audio from them
+              if (extractedUrl && extractedUrl.startsWith('http')) {
                 videoUrl = extractedUrl;
                 break; // Found a valid URL
               }
