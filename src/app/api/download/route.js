@@ -161,138 +161,98 @@ export async function POST(request) {
       let videoInfo;
 
       if (format === 'mp3' || format === 'audio') {
-        // Strategy: Try multiple approaches without cookies
-        // 1. Try different player clients with JS runtime
-        // 2. Try simpler format selectors
+        // Strategy: Try simple approach first (works best with cookies), then player clients
+        // 1. Try simple extraction without player client args (what worked in direct test)
+        // 2. Try different player clients if simple approach fails
         // 3. Fallback to video URL extraction for client-side audio extraction
         
-        // Try multiple strategies: different player clients
-        // Order matters: try most reliable clients first
-        const playerClients = ['ios', 'android', 'web', 'mweb', 'tv_embedded'];
         let audioUrl = null;
         let lastError = null;
         
-        // Try each player client with a small delay to avoid rate limiting
-        for (let i = 0; i < playerClients.length; i++) {
-          const client = playerClients[i];
+        // FIRST: Try simple approach without player client args (this worked in direct test)
+        try {
+          const baseArgs = `-g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir -f "bestaudio/best"`;
+          const command = await buildYtDlpCommand(ytDlpPath, baseArgs, url);
           
-          // Add delay between attempts (except first)
-          if (i > 0) {
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
-          
-          try {
-            // Try with different player clients to bypass restrictions
-            const baseArgs = `-g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub --extractor-args "youtube:player_client=${client}" -f "bestaudio/best"`;
-            
-            const command = await buildYtDlpCommand(ytDlpPath, baseArgs, url);
-            
-            const audioResult = await Promise.race([
-              execAsync(command, { timeout: 15000, maxBuffer: 512 * 1024 }),
-              new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Extraction timeout')), 15000)
-              )
-            ]).catch((error) => {
-              // Capture both stdout and stderr from error
-              const errorMsg = error.message || error.toString();
-              const stderr = error.stderr || '';
-              const stdout = error.stdout || '';
-              
-              // Log error in development
-              if (process.env.NODE_ENV === 'development') {
-                console.error(`yt-dlp error for client ${client}:`, errorMsg);
-                if (stderr) console.error('stderr:', stderr.substring(0, 500));
-                if (stdout) console.error('stdout:', stdout.substring(0, 500));
-              }
-              
-              lastError = errorMsg;
-              
-              // Check if it's a bot detection error
-              if (errorMsg.includes('Sign in to confirm') || errorMsg.includes('LOGIN_REQUIRED') || 
-                  stderr.includes('Sign in to confirm') || stderr.includes('LOGIN_REQUIRED')) {
-                lastError = 'YouTube is requiring authentication for this video';
-              }
-              
-              // Return error info
-              return { stdout: stdout || '', stderr: stderr || errorMsg };
-            });
-            
-            audioUrl = audioResult.stdout.trim().split('\n')[0];
-            
-            // Check stderr for bot detection errors
-            if (audioResult.stderr && (audioResult.stderr.includes('Sign in to confirm') || audioResult.stderr.includes('LOGIN_REQUIRED'))) {
-              lastError = 'YouTube is requiring authentication for this video';
-              continue; // Try next client
-            }
-            
-            // Log success in development
-            if (process.env.NODE_ENV === 'development' && audioUrl && audioUrl.startsWith('http')) {
-              console.log(`Successfully extracted audio URL using client ${client}`);
-            }
-            
-            // If we got a valid URL (including HLS), break out of loop
-            if (audioUrl && audioUrl.startsWith('http')) {
-              break;
-            }
-          } catch (clientError) {
-            lastError = clientError.message || clientError.toString();
-            // Try next client
-            continue;
-          }
-        }
-          
-        // If we got a valid URL from any client, return it (even if HLS)
-        if (audioUrl && audioUrl.startsWith('http')) {
-          const isHLS = audioUrl.includes('.m3u8');
-          
-          // Return HLS URLs too - client can handle them or we'll extract video URL
-          return NextResponse.json({
-            success: true,
-            audioUrl: isHLS ? null : audioUrl, // Don't return HLS as audioUrl
-            videoUrl: isHLS ? audioUrl : null, // Return HLS as videoUrl for client-side extraction
-            format: 'mp3',
-            title: 'Audio',
-            duration: null,
-            thumbnail: null,
-            extractAudioFromVideo: isHLS, // Flag to extract audio from HLS video
-            isHLS: isHLS,
+          const simpleResult = await Promise.race([
+            execAsync(command, { timeout: 15000, maxBuffer: 512 * 1024 }),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Simple extraction timeout')), 15000)
+            )
+          ]).catch((error) => {
+            const errorMsg = error.message || error.toString();
+            const stderr = error.stderr || '';
+            const stdout = error.stdout || '';
+            lastError = errorMsg;
+            return { stdout: stdout || '', stderr: stderr || errorMsg };
           });
+          
+          audioUrl = simpleResult.stdout.trim().split('\n')[0];
+          
+          // If we got a valid URL (including HLS), return it immediately
+          if (audioUrl && audioUrl.startsWith('http')) {
+            const isHLS = audioUrl.includes('.m3u8');
+            return NextResponse.json({
+              success: true,
+              audioUrl: isHLS ? null : audioUrl,
+              videoUrl: isHLS ? audioUrl : null,
+              format: 'mp3',
+              title: 'Audio',
+              duration: null,
+              thumbnail: null,
+              extractAudioFromVideo: isHLS,
+              isHLS: isHLS,
+            });
+          }
+        } catch (simpleError) {
+          lastError = simpleError.message || simpleError.toString();
         }
         
-        // If all player clients failed, try simpler approach without player client args
+        // SECOND: If simple approach failed, try player clients
         if (!audioUrl || !audioUrl.startsWith('http')) {
-          try {
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Delay before fallback
+          const playerClients = ['ios', 'android', 'web'];
+          
+          for (let i = 0; i < playerClients.length; i++) {
+            const client = playerClients[i];
             
-            const baseArgs = `-g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir -f "bestaudio/best"`;
-            const command = await buildYtDlpCommand(ytDlpPath, baseArgs, url);
-            
-            const fallbackResult = await Promise.race([
-              execAsync(command, { timeout: 12000, maxBuffer: 512 * 1024 }),
-              new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Fallback timeout')), 12000)
-              )
-            ]).catch((error) => {
-              return { stdout: '' };
-            });
-            
-            const fallbackUrl = fallbackResult.stdout.trim().split('\n')[0];
-            
-            if (fallbackUrl && fallbackUrl.startsWith('http')) {
-              // Return the URL even if it's HLS - let the client handle it
-              return NextResponse.json({
-                success: true,
-                audioUrl: fallbackUrl,
-                videoUrl: null,
-                format: 'mp3',
-                title: 'Audio',
-                duration: null,
-                thumbnail: null,
-                isHLS: fallbackUrl.includes('.m3u8'),
-              });
+            if (i > 0) {
+              await new Promise(resolve => setTimeout(resolve, 500));
             }
-          } catch (fallbackError) {
-            // Fallback extraction failed, continue to video URL extraction
+            
+            try {
+              const baseArgs = `-g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub --extractor-args "youtube:player_client=${client}" -f "bestaudio/best"`;
+              const command = await buildYtDlpCommand(ytDlpPath, baseArgs, url);
+              
+              const audioResult = await Promise.race([
+                execAsync(command, { timeout: 15000, maxBuffer: 512 * 1024 }),
+                new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error('Extraction timeout')), 15000)
+                )
+              ]).catch((error) => {
+                lastError = error.message || error.toString();
+                return { stdout: '', stderr: error.message || '' };
+              });
+              
+              audioUrl = audioResult.stdout.trim().split('\n')[0];
+              
+              if (audioUrl && audioUrl.startsWith('http')) {
+                const isHLS = audioUrl.includes('.m3u8');
+                return NextResponse.json({
+                  success: true,
+                  audioUrl: isHLS ? null : audioUrl,
+                  videoUrl: isHLS ? audioUrl : null,
+                  format: 'mp3',
+                  title: 'Audio',
+                  duration: null,
+                  thumbnail: null,
+                  extractAudioFromVideo: isHLS,
+                  isHLS: isHLS,
+                });
+              }
+            } catch (clientError) {
+              lastError = clientError.message || clientError.toString();
+              continue;
+            }
           }
         }
         
