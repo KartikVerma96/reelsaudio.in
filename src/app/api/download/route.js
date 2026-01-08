@@ -9,12 +9,23 @@ const execAsync = promisify(exec);
 
 /**
  * Check if cookies file exists and return cookie flag
+ * In standalone mode, process.cwd() is .next/standalone, so we need to go up to project root
  */
 function getCookiesFlag() {
-  const cookiesPath = path.join(process.cwd(), 'cookies.txt');
-  if (fs.existsSync(cookiesPath)) {
-    return `--cookies "${cookiesPath}"`;
+  // Try multiple possible locations
+  const possiblePaths = [
+    path.join(process.cwd(), 'cookies.txt'), // Current directory
+    path.join(process.cwd(), '..', 'cookies.txt'), // One level up (for standalone)
+    path.join(process.cwd(), '..', '..', 'cookies.txt'), // Two levels up (for standalone)
+    '/var/www/freereelsdownload/cookies.txt', // Absolute path
+  ];
+  
+  for (const cookiesPath of possiblePaths) {
+    if (fs.existsSync(cookiesPath)) {
+      return `--cookies "${cookiesPath}"`;
+    }
   }
+  
   return '';
 }
 
