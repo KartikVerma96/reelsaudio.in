@@ -141,8 +141,10 @@ export async function POST(request) {
         // 2. Try simpler format selectors
         // 3. Fallback to video URL extraction for client-side audio extraction
         
-        const playerClients = ['ios', 'android', 'web', 'tv_embedded', 'mweb'];
+        // Try multiple strategies: different player clients, with and without age check bypass
+        const playerClients = ['ios', 'android', 'web', 'tv_embedded', 'mweb', 'android_embedded'];
         let audioUrl = null;
+        let lastError = null;
         
         // Try each player client with a small delay to avoid rate limiting
         for (let i = 0; i < playerClients.length; i++) {
@@ -154,7 +156,8 @@ export async function POST(request) {
           }
           
           try {
-            const baseArgs = `-g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub --extractor-args "youtube:player_client=${client}" -f "bestaudio/best"`;
+            // Try with --no-check-age first (bypasses age restrictions)
+            const baseArgs = `-g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub --no-check-age --extractor-args "youtube:player_client=${client}" -f "bestaudio/best"`;
             
             const command = await buildYtDlpCommand(ytDlpPath, baseArgs, url);
             
@@ -164,17 +167,25 @@ export async function POST(request) {
                 setTimeout(() => reject(new Error('Extraction timeout')), 15000)
               )
             ]).catch((error) => {
+              lastError = error.message || error.toString();
               // Try next client
-              return { stdout: '' };
+              return { stdout: '', stderr: error.message || '' };
             });
             
             audioUrl = audioResult.stdout.trim().split('\n')[0];
+            
+            // Check stderr for bot detection errors
+            if (audioResult.stderr && (audioResult.stderr.includes('Sign in to confirm') || audioResult.stderr.includes('LOGIN_REQUIRED'))) {
+              lastError = 'YouTube is requiring authentication for this video';
+              continue; // Try next client
+            }
             
             // If we got a valid URL, break out of loop
             if (audioUrl && audioUrl.startsWith('http') && !audioUrl.includes('.m3u8')) {
               break;
             }
           } catch (clientError) {
+            lastError = clientError.message || clientError.toString();
             // Try next client
             continue;
           }
@@ -239,7 +250,7 @@ export async function POST(request) {
         // If all audio URL extraction methods fail, try to get video URL for client-side extraction
         // This works even when audio formats are not directly available
         const videoFormatSelectors = ['best[height<=720]/best', 'best[height<=480]/best', 'worst'];
-        const videoClients = ['ios', 'android', 'web', 'mweb'];
+        const videoClients = ['ios', 'android', 'web', 'mweb', 'android_embedded'];
         let videoUrl = null;
         
         for (let i = 0; i < videoClients.length && !videoUrl; i++) {
@@ -252,7 +263,8 @@ export async function POST(request) {
           
           for (const formatSelector of videoFormatSelectors) {
             try {
-              const baseArgs = `-g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --extractor-args "youtube:player_client=${client}" -f "${formatSelector}"`;
+              // Try with --no-check-age to bypass age restrictions
+              const baseArgs = `-g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-check-age --extractor-args "youtube:player_client=${client}" -f "${formatSelector}"`;
               const command = await buildYtDlpCommand(ytDlpPath, baseArgs, url);
               
               const videoUrlResult = await Promise.race([
@@ -260,15 +272,25 @@ export async function POST(request) {
                 new Promise((_, reject) => 
                   setTimeout(() => reject(new Error('Video URL extraction timeout')), 15000)
                 )
-              ]).catch(() => ({ stdout: '' }));
+              ]).catch((error) => {
+                lastError = error.message || error.toString();
+                return { stdout: '', stderr: error.message || '' };
+              });
               
               const extractedUrl = videoUrlResult.stdout.trim().split('\n')[0];
+              
+              // Check stderr for bot detection errors
+              if (videoUrlResult.stderr && (videoUrlResult.stderr.includes('Sign in to confirm') || videoUrlResult.stderr.includes('LOGIN_REQUIRED'))) {
+                lastError = 'YouTube is requiring authentication for this video';
+                continue; // Try next format/client
+              }
               
               if (extractedUrl && extractedUrl.startsWith('http') && !extractedUrl.includes('.m3u8')) {
                 videoUrl = extractedUrl;
                 break; // Found a valid URL
               }
             } catch (formatError) {
+              lastError = formatError.message || formatError.toString();
               // Try next format selector
               continue;
             }
@@ -289,8 +311,12 @@ export async function POST(request) {
           });
         }
         
-        // If all extraction methods fail, return error
-        throw new Error('Could not extract audio URL. The video may be unavailable, private, or region-restricted. Please try a different video or check if the URL is correct.');
+        // If all extraction methods fail, return detailed error
+        const errorMessage = lastError && lastError.includes('Sign in to confirm') 
+          ? 'This video requires authentication or is age-restricted. YouTube is blocking automated access. Please try a different public video or use cookies for authentication.'
+          : 'Could not extract audio URL. The video may be unavailable, private, age-restricted, or region-restricted. Please try a different video or check if the URL is correct.';
+        
+        throw new Error(errorMessage);
       } else {
         // For video, first try to get direct URL (faster)
         // Only use server-side download if it's HLS or direct URL fails
