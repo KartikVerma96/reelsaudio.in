@@ -46,14 +46,8 @@ async function buildYtDlpCommand(ytDlpPath, baseArgs, url) {
   // Always try to use JS runtime if Node.js is available
   const jsRuntimeFlag = nodePath ? `--js-runtimes node:${nodePath}` : '';
   
-  // Rotating user agents to appear more human-like
-  const userAgents = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-  ];
-  const userAgent = userAgents[Math.floor(Math.random() * userAgents.length)];
+  // Use consistent mobile user agent (iOS works best with YouTube)
+  const userAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
   
   const command = `"${ytDlpPath}" ${jsRuntimeFlag} ${baseArgs} --user-agent "${userAgent}" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" --add-header "Accept:text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" --add-header "Accept-Encoding:gzip, deflate, br" --add-header "DNT:1" --add-header "Connection:keep-alive" --add-header "Upgrade-Insecure-Requests:1" "${url}"`;
   
@@ -141,8 +135,9 @@ export async function POST(request) {
         // 2. Try simpler format selectors
         // 3. Fallback to video URL extraction for client-side audio extraction
         
-        // Try multiple strategies: different player clients, with and without age check bypass
-        const playerClients = ['ios', 'android', 'web', 'tv_embedded', 'mweb', 'android_embedded'];
+        // Try multiple strategies: different player clients
+        // Order matters: try most reliable clients first
+        const playerClients = ['ios', 'android', 'web', 'mweb', 'tv_embedded'];
         let audioUrl = null;
         let lastError = null;
         
@@ -274,7 +269,7 @@ export async function POST(request) {
         // If all audio URL extraction methods fail, try to get video URL for client-side extraction
         // This works even when audio formats are not directly available
         const videoFormatSelectors = ['best[height<=720]/best', 'best[height<=480]/best', 'worst'];
-        const videoClients = ['ios', 'android', 'web', 'mweb', 'android_embedded'];
+        const videoClients = ['ios', 'android', 'web', 'mweb'];
         let videoUrl = null;
         
         for (let i = 0; i < videoClients.length && !videoUrl; i++) {
