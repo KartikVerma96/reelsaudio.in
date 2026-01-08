@@ -243,7 +243,7 @@ export async function POST(request) {
             }
             
             try {
-              const baseArgs = `-g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub --extractor-args "youtube:player_client=${client}" -f "bestaudio/best"`;
+              const baseArgs = `-g --skip-download --no-playlist --no-warnings --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub --extractor-args "youtube:player_client=${client}" -f "bestaudio/best"`;
               const command = await buildYtDlpCommand(ytDlpPath, baseArgs, url);
               
               const audioResult = await Promise.race([
@@ -296,7 +296,7 @@ export async function POST(request) {
           for (const formatSelector of videoFormatSelectors) {
             try {
               // Try with different player clients to bypass restrictions
-              const baseArgs = `-g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --extractor-args "youtube:player_client=${client}" -f "${formatSelector}"`;
+              const baseArgs = `-g --skip-download --no-playlist --no-warnings --no-check-certificate --prefer-insecure --no-cache-dir --extractor-args "youtube:player_client=${client}" -f "${formatSelector}"`;
               const command = await buildYtDlpCommand(ytDlpPath, baseArgs, url);
               
               const videoUrlResult = await Promise.race([
@@ -394,7 +394,7 @@ export async function POST(request) {
         
         try {
           // Ultra-fast extraction with minimal processing
-          const baseArgs = `-g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub -f "${formatSelector}"`;
+          const baseArgs = `-g --skip-download --no-playlist --no-warnings --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub -f "${formatSelector}"`;
           const command = await buildYtDlpCommand(ytDlpPath, baseArgs, url);
           
           const videoResult = await Promise.race([
