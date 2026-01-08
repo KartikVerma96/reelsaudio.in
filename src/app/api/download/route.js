@@ -373,11 +373,11 @@ export async function POST(request) {
         if (process.env.NODE_ENV === 'development') {
           console.error('All extraction methods failed. Last error:', lastError);
         }
-        
-        const errorMessage = lastError && (lastError.includes('Sign in to confirm') || lastError.includes('LOGIN_REQUIRED'))
-          ? 'This video requires authentication or is age-restricted. YouTube is blocking automated access. Please try a different public video or use cookies for authentication.'
+
+        const errorMessage = lastError && (lastError.includes('Sign in to confirm') || lastError.includes('LOGIN_REQUIRED') || lastError.includes('Failed to extract any player response'))
+          ? 'This video is being blocked by YouTube\'s anti-bot measures. Try a different public video - some videos work better than others with automated extraction.'
           : lastError || 'Could not extract audio URL. The video may be unavailable, private, age-restricted, or region-restricted. Please try a different video or check if the URL is correct.';
-        
+
         throw new Error(errorMessage);
       } else {
         // For video, first try to get direct URL (faster)
