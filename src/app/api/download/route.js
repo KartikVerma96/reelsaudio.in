@@ -167,9 +167,28 @@ export async function POST(request) {
                 setTimeout(() => reject(new Error('Extraction timeout')), 15000)
               )
             ]).catch((error) => {
-              lastError = error.message || error.toString();
-              // Try next client
-              return { stdout: '', stderr: error.message || '' };
+              // Capture both stdout and stderr from error
+              const errorMsg = error.message || error.toString();
+              const stderr = error.stderr || '';
+              const stdout = error.stdout || '';
+              
+              // Log error in development
+              if (process.env.NODE_ENV === 'development') {
+                console.error(`yt-dlp error for client ${client}:`, errorMsg);
+                if (stderr) console.error('stderr:', stderr.substring(0, 500));
+                if (stdout) console.error('stdout:', stdout.substring(0, 500));
+              }
+              
+              lastError = errorMsg;
+              
+              // Check if it's a bot detection error
+              if (errorMsg.includes('Sign in to confirm') || errorMsg.includes('LOGIN_REQUIRED') || 
+                  stderr.includes('Sign in to confirm') || stderr.includes('LOGIN_REQUIRED')) {
+                lastError = 'YouTube is requiring authentication for this video';
+              }
+              
+              // Return error info
+              return { stdout: stdout || '', stderr: stderr || errorMsg };
             });
             
             audioUrl = audioResult.stdout.trim().split('\n')[0];
@@ -178,6 +197,11 @@ export async function POST(request) {
             if (audioResult.stderr && (audioResult.stderr.includes('Sign in to confirm') || audioResult.stderr.includes('LOGIN_REQUIRED'))) {
               lastError = 'YouTube is requiring authentication for this video';
               continue; // Try next client
+            }
+            
+            // Log success in development
+            if (process.env.NODE_ENV === 'development' && audioUrl && audioUrl.startsWith('http')) {
+              console.log(`Successfully extracted audio URL using client ${client}`);
             }
             
             // If we got a valid URL, break out of loop
@@ -273,8 +297,27 @@ export async function POST(request) {
                   setTimeout(() => reject(new Error('Video URL extraction timeout')), 15000)
                 )
               ]).catch((error) => {
-                lastError = error.message || error.toString();
-                return { stdout: '', stderr: error.message || '' };
+                // Capture both stdout and stderr from error
+                const errorMsg = error.message || error.toString();
+                const stderr = error.stderr || '';
+                const stdout = error.stdout || '';
+                
+                // Log error in development
+                if (process.env.NODE_ENV === 'development') {
+                  console.error(`yt-dlp video URL error for client ${client}, format ${formatSelector}:`, errorMsg);
+                  if (stderr) console.error('stderr:', stderr.substring(0, 500));
+                  if (stdout) console.error('stdout:', stdout.substring(0, 500));
+                }
+                
+                lastError = errorMsg;
+                
+                // Check if it's a bot detection error
+                if (errorMsg.includes('Sign in to confirm') || errorMsg.includes('LOGIN_REQUIRED') || 
+                    stderr.includes('Sign in to confirm') || stderr.includes('LOGIN_REQUIRED')) {
+                  lastError = 'YouTube is requiring authentication for this video';
+                }
+                
+                return { stdout: stdout || '', stderr: stderr || errorMsg };
               });
               
               const extractedUrl = videoUrlResult.stdout.trim().split('\n')[0];
@@ -283,6 +326,11 @@ export async function POST(request) {
               if (videoUrlResult.stderr && (videoUrlResult.stderr.includes('Sign in to confirm') || videoUrlResult.stderr.includes('LOGIN_REQUIRED'))) {
                 lastError = 'YouTube is requiring authentication for this video';
                 continue; // Try next format/client
+              }
+              
+              // Log success in development
+              if (process.env.NODE_ENV === 'development' && extractedUrl && extractedUrl.startsWith('http')) {
+                console.log(`Successfully extracted video URL using client ${client}, format ${formatSelector}`);
               }
               
               if (extractedUrl && extractedUrl.startsWith('http') && !extractedUrl.includes('.m3u8')) {
@@ -312,9 +360,14 @@ export async function POST(request) {
         }
         
         // If all extraction methods fail, return detailed error
-        const errorMessage = lastError && lastError.includes('Sign in to confirm') 
+        // Log last error for debugging
+        if (process.env.NODE_ENV === 'development') {
+          console.error('All extraction methods failed. Last error:', lastError);
+        }
+        
+        const errorMessage = lastError && (lastError.includes('Sign in to confirm') || lastError.includes('LOGIN_REQUIRED'))
           ? 'This video requires authentication or is age-restricted. YouTube is blocking automated access. Please try a different public video or use cookies for authentication.'
-          : 'Could not extract audio URL. The video may be unavailable, private, age-restricted, or region-restricted. Please try a different video or check if the URL is correct.';
+          : lastError || 'Could not extract audio URL. The video may be unavailable, private, age-restricted, or region-restricted. Please try a different video or check if the URL is correct.';
         
         throw new Error(errorMessage);
       } else {
