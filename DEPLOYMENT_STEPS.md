@@ -107,16 +107,21 @@ npm --version    # Should show 10.x.x
 ## 🐍 Step 4: Install Python & yt-dlp (Manual - Skip if you used deploy.sh)
 
 ```bash
-# Install Python 3 and pip
-sudo apt install -y python3 python3-pip python3-venv
+# Install Python 3, pip, and pipx (for Ubuntu 24.04 PEP 668 compliance)
+sudo apt install -y python3 python3-pip python3-venv python3-full pipx
 
-# Install yt-dlp
-pip3 install --upgrade yt-dlp
+# Install yt-dlp using pipx (recommended for system-wide Python apps)
+pipx install yt-dlp
+
+# Make yt-dlp available in PATH
+pipx ensurepath
 
 # Verify installation
 yt-dlp --version
 # Should show: 2025.x.x or similar
 ```
+
+**Note:** Ubuntu 24.04 uses PEP 668 protection, so we use `pipx` instead of `pip3 install` for system-wide Python packages.
 
 ---
 

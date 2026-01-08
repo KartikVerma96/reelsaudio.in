@@ -8,14 +8,34 @@ import path from 'path';
 const execAsync = promisify(exec);
 
 /**
- * Check if cookies file exists and return cookie flag
+ * Get Node.js path for JS runtime
  */
-function getCookiesFlag() {
-  const cookiesPath = path.join(process.cwd(), 'cookies.txt');
-  if (fs.existsSync(cookiesPath)) {
-    return `--cookies "${cookiesPath}"`;
+async function getNodePath() {
+  try {
+    const { stdout } = await execAsync('which node', { timeout: 2000 });
+    return stdout.trim();
+  } catch (error) {
+    return null;
   }
-  return '';
+}
+
+/**
+ * Build yt-dlp command with JS runtime and anti-bot headers
+ */
+async function buildYtDlpCommand(ytDlpPath, baseArgs, url) {
+  const nodePath = await getNodePath();
+  const jsRuntimeFlag = nodePath ? `--js-runtimes node:${nodePath}` : '';
+  
+  // Rotating user agents to appear more human-like
+  const userAgents = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+  ];
+  const userAgent = userAgents[Math.floor(Math.random() * userAgents.length)];
+  
+  return `"${ytDlpPath}" ${jsRuntimeFlag} ${baseArgs} --user-agent "${userAgent}" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" --add-header "Accept:text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" --add-header "Accept-Encoding:gzip, deflate, br" --add-header "DNT:1" --add-header "Connection:keep-alive" --add-header "Upgrade-Insecure-Requests:1" "${url}"`;
 }
 
 /**
@@ -89,23 +109,32 @@ export async function POST(request) {
       let videoInfo;
 
       if (format === 'mp3' || format === 'audio') {
-        // First, try to get direct audio URL (faster)
-        // Only use server-side download if it's HLS or direct URL fails
-        // Try multiple YouTube player clients to bypass bot detection
-        const playerClients = ['ios', 'android', 'web', 'tv_embedded'];
+        // Strategy: Try multiple approaches without cookies
+        // 1. Try different player clients with JS runtime
+        // 2. Try simpler format selectors
+        // 3. Fallback to video URL extraction for client-side audio extraction
+        
+        const playerClients = ['ios', 'android', 'web', 'tv_embedded', 'mweb'];
         let audioUrl = null;
         
-        const cookiesFlag = getCookiesFlag();
-        
-        for (const client of playerClients) {
+        // Try each player client with a small delay to avoid rate limiting
+        for (let i = 0; i < playerClients.length; i++) {
+          const client = playerClients[i];
+          
+          // Add delay between attempts (except first)
+          if (i > 0) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+          
           try {
+            const baseArgs = `-g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub --extractor-args "youtube:player_client=${client}" -f "bestaudio/best"`;
+            
+            const command = await buildYtDlpCommand(ytDlpPath, baseArgs, url);
+            
             const audioResult = await Promise.race([
-              execAsync(
-                `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub ${cookiesFlag} --extractor-args "youtube:player_client=${client}" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -f "bestaudio/best" "${url}"`,
-                { timeout: 12000, maxBuffer: 512 * 1024 } // 12 second timeout per attempt
-              ),
+              execAsync(command, { timeout: 15000, maxBuffer: 512 * 1024 }),
               new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Extraction timeout')), 12000)
+                setTimeout(() => reject(new Error('Extraction timeout')), 15000)
               )
             ]).catch((error) => {
               // Try next client
@@ -143,62 +172,66 @@ export async function POST(request) {
           // If HLS, continue to fallback methods
         }
         
-        // If all player clients failed, try fallback methods
-        try {
-        
-          // Try simpler format selector without player client args
-          const cookiesFlag = getCookiesFlag();
-          const fallbackResult = await Promise.race([
-            execAsync(
-              `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir ${cookiesFlag} --user-agent "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -f "bestaudio/best" "${url}"`,
-              { timeout: 10000, maxBuffer: 512 * 1024 } // 10 second timeout
-            ),
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Fallback timeout')), 10000)
-            )
-          ]).catch((error) => {
-            return { stdout: '' };
-          });
-          
-          const fallbackUrl = fallbackResult.stdout.trim().split('\n')[0];
-          
-          if (fallbackUrl && fallbackUrl.startsWith('http')) {
-            // Return the URL even if it's HLS - let the client handle it
-            return NextResponse.json({
-              success: true,
-              audioUrl: fallbackUrl,
-              videoUrl: null,
-              format: 'mp3',
-              title: 'Audio',
-              duration: null,
-              thumbnail: null,
-              isHLS: fallbackUrl.includes('.m3u8'),
+        // If all player clients failed, try simpler approach without player client args
+        if (!audioUrl || !audioUrl.startsWith('http')) {
+          try {
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Delay before fallback
+            
+            const baseArgs = `-g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir -f "bestaudio/best"`;
+            const command = await buildYtDlpCommand(ytDlpPath, baseArgs, url);
+            
+            const fallbackResult = await Promise.race([
+              execAsync(command, { timeout: 12000, maxBuffer: 512 * 1024 }),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Fallback timeout')), 12000)
+              )
+            ]).catch((error) => {
+              return { stdout: '' };
             });
+            
+            const fallbackUrl = fallbackResult.stdout.trim().split('\n')[0];
+            
+            if (fallbackUrl && fallbackUrl.startsWith('http')) {
+              // Return the URL even if it's HLS - let the client handle it
+              return NextResponse.json({
+                success: true,
+                audioUrl: fallbackUrl,
+                videoUrl: null,
+                format: 'mp3',
+                title: 'Audio',
+                duration: null,
+                thumbnail: null,
+                isHLS: fallbackUrl.includes('.m3u8'),
+              });
+            }
+          } catch (fallbackError) {
+            // Fallback extraction failed, continue to video URL extraction
           }
-        } catch (fallbackError) {
-          // Fallback extraction failed
         }
         
-        // If all URL extraction methods fail, try to get video URL and extract audio server-side
+        // If all audio URL extraction methods fail, try to get video URL for client-side extraction
         // This works even when audio formats are not directly available
-        // Try multiple video format selectors and player clients
         const videoFormatSelectors = ['best[height<=720]/best', 'best[height<=480]/best', 'worst'];
-        const videoClients = ['ios', 'android', 'web'];
+        const videoClients = ['ios', 'android', 'web', 'mweb'];
         let videoUrl = null;
         
-        for (const client of videoClients) {
-          if (videoUrl) break; // If we got a URL, stop trying
+        for (let i = 0; i < videoClients.length && !videoUrl; i++) {
+          const client = videoClients[i];
+          
+          // Add delay between attempts
+          if (i > 0) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
           
           for (const formatSelector of videoFormatSelectors) {
             try {
-              const cookiesFlag = getCookiesFlag();
+              const baseArgs = `-g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --extractor-args "youtube:player_client=${client}" -f "${formatSelector}"`;
+              const command = await buildYtDlpCommand(ytDlpPath, baseArgs, url);
+              
               const videoUrlResult = await Promise.race([
-                execAsync(
-                  `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir ${cookiesFlag} --extractor-args "youtube:player_client=${client}" --user-agent "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -f "${formatSelector}" "${url}"`,
-                  { timeout: 12000, maxBuffer: 512 * 1024 }
-                ),
+                execAsync(command, { timeout: 15000, maxBuffer: 512 * 1024 }),
                 new Promise((_, reject) => 
-                  setTimeout(() => reject(new Error('Video URL extraction timeout')), 12000)
+                  setTimeout(() => reject(new Error('Video URL extraction timeout')), 15000)
                 )
               ]).catch(() => ({ stdout: '' }));
               
@@ -246,16 +279,13 @@ export async function POST(request) {
         
         try {
           // Ultra-fast extraction with minimal processing
-          // Use --skip-download and other flags to avoid any file operations
-          // Reduce timeout to 8 seconds for faster failure
-          const cookiesFlag = getCookiesFlag();
+          const baseArgs = `-g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub -f "${formatSelector}"`;
+          const command = await buildYtDlpCommand(ytDlpPath, baseArgs, url);
+          
           const videoResult = await Promise.race([
-            execAsync(
-              `"${ytDlpPath}" -g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub ${cookiesFlag} --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -f "${formatSelector}" "${url}"`,
-              { timeout: 8000, maxBuffer: 256 * 1024 } // 8 second timeout, 256KB buffer
-            ),
+            execAsync(command, { timeout: 10000, maxBuffer: 256 * 1024 }),
             new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Extraction timeout')), 8000)
+              setTimeout(() => reject(new Error('Extraction timeout')), 10000)
             )
           ]).catch(() => ({ stdout: '' }));
           
@@ -290,9 +320,11 @@ export async function POST(request) {
         
         try {
           // Set timeout for yt-dlp (90 seconds max for video)
-          const cookiesFlag = getCookiesFlag();
+          const baseArgs = `-f "${formatSelector}" --recode-video mp4 --no-progress -o "${tempFile}"`;
+          const command = await buildYtDlpCommand(ytDlpPath, baseArgs, url);
+          
           const downloadPromise = execAsync(
-            `"${ytDlpPath}" -f "${formatSelector}" --recode-video mp4 --no-progress ${cookiesFlag} --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" -o "${tempFile}" "${url}"`,
+            command,
             { timeout: 90000, maxBuffer: 10 * 1024 * 1024 } // 90 second timeout, 10MB buffer
           );
           
@@ -317,11 +349,9 @@ export async function POST(request) {
           // Get video info (don't wait if it fails)
           let videoInfo = {};
           try {
-            const cookiesFlag = getCookiesFlag();
-            const { stdout: infoStdout } = await execAsync(
-              `"${ytDlpPath}" -j --no-playlist ${cookiesFlag} --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" "${url}"`,
-              { timeout: 10000 } // 10 second timeout for info
-            );
+            const baseArgs = `-j --no-playlist`;
+            const command = await buildYtDlpCommand(ytDlpPath, baseArgs, url);
+            const { stdout: infoStdout } = await execAsync(command, { timeout: 10000 });
             videoInfo = JSON.parse(infoStdout);
           } catch (infoError) {
             // Info extraction failed, but we have the file
@@ -398,10 +428,9 @@ export async function GET(request) {
     }
 
     // Get available formats
-    const cookiesFlag = getCookiesFlag();
-    const { stdout } = await execAsync(
-      `"${ytDlpPath}" -j --no-playlist ${cookiesFlag} --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" "${url}"`
-    );
+    const baseArgs = `-j --no-playlist`;
+    const command = await buildYtDlpCommand(ytDlpPath, baseArgs, url);
+    const { stdout } = await execAsync(command);
     
     const info = JSON.parse(stdout);
     

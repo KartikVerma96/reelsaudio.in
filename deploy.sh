@@ -27,8 +27,10 @@ curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
 apt install -y nodejs
 
 echo -e "${YELLOW}Step 3: Installing Python and yt-dlp...${NC}"
-apt install -y python3 python3-pip python3-venv
-pip3 install --upgrade yt-dlp
+apt install -y python3 python3-pip python3-venv python3-full pipx
+pipx install yt-dlp
+# Make yt-dlp available system-wide
+pipx ensurepath
 
 echo -e "${YELLOW}Step 4: Installing FFmpeg...${NC}"
 apt install -y ffmpeg
