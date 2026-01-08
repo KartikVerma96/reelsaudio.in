@@ -171,7 +171,8 @@ export async function POST(request) {
         
         // FIRST: Try simple approach without player client args (this worked in direct test)
         try {
-          const baseArgs = `-g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir -f "bestaudio/best"`;
+          // Remove --quiet flag to see what yt-dlp outputs
+          const baseArgs = `-g --skip-download --no-playlist --no-warnings --no-check-certificate --prefer-insecure --no-cache-dir -f "bestaudio/best"`;
           const command = await buildYtDlpCommand(ytDlpPath, baseArgs, url);
 
           // Log the exact command being executed
@@ -204,6 +205,7 @@ export async function POST(request) {
             console.log('Simple extraction result starts with:', audioUrl.substring(0, 50));
           } else {
             console.log('No audio URL returned. Full stdout:', simpleResult.stdout);
+            console.log('Full stderr:', simpleResult.stderr);
           }
 
           // If we got a valid URL (including HLS), return it immediately
@@ -222,7 +224,7 @@ export async function POST(request) {
               isHLS: isHLS,
             });
           } else {
-            console.log('Simple extraction did not return valid URL');
+            console.log('Simple extraction did not return valid URL. Trying fallback...');
           }
         } catch (simpleError) {
           console.error('Simple extraction exception:', simpleError.message);
