@@ -175,23 +175,35 @@ export async function POST(request) {
           const command = await buildYtDlpCommand(ytDlpPath, baseArgs, url);
           
           const simpleResult = await Promise.race([
-            execAsync(command, { timeout: 15000, maxBuffer: 512 * 1024 }),
+            execAsync(command, { timeout: 20000, maxBuffer: 1024 * 1024 }),
             new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Simple extraction timeout')), 15000)
+              setTimeout(() => reject(new Error('Simple extraction timeout')), 20000)
             )
           ]).catch((error) => {
             const errorMsg = error.message || error.toString();
             const stderr = error.stderr || '';
             const stdout = error.stdout || '';
+            
+            // Log the actual error for debugging
+            console.error('Simple extraction failed:', errorMsg);
+            if (stderr) console.error('stderr:', stderr.substring(0, 1000));
+            if (stdout) console.error('stdout:', stdout.substring(0, 1000));
+            
             lastError = errorMsg;
             return { stdout: stdout || '', stderr: stderr || errorMsg };
           });
           
           audioUrl = simpleResult.stdout.trim().split('\n')[0];
           
+          // Log what we got
+          if (audioUrl) {
+            console.log('Simple extraction result:', audioUrl.substring(0, 100));
+          }
+          
           // If we got a valid URL (including HLS), return it immediately
           if (audioUrl && audioUrl.startsWith('http')) {
             const isHLS = audioUrl.includes('.m3u8');
+            console.log('Returning audio URL, isHLS:', isHLS);
             return NextResponse.json({
               success: true,
               audioUrl: isHLS ? null : audioUrl,
@@ -203,8 +215,11 @@ export async function POST(request) {
               extractAudioFromVideo: isHLS,
               isHLS: isHLS,
             });
+          } else {
+            console.log('Simple extraction did not return valid URL. stdout:', simpleResult.stdout?.substring(0, 200));
           }
         } catch (simpleError) {
+          console.error('Simple extraction exception:', simpleError.message);
           lastError = simpleError.message || simpleError.toString();
         }
         
