@@ -156,8 +156,8 @@ export async function POST(request) {
           }
           
           try {
-            // Try with --no-check-age first (bypasses age restrictions)
-            const baseArgs = `-g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub --no-check-age --extractor-args "youtube:player_client=${client}" -f "bestaudio/best"`;
+            // Try with different player clients to bypass restrictions
+            const baseArgs = `-g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub --extractor-args "youtube:player_client=${client}" -f "bestaudio/best"`;
             
             const command = await buildYtDlpCommand(ytDlpPath, baseArgs, url);
             
@@ -287,8 +287,8 @@ export async function POST(request) {
           
           for (const formatSelector of videoFormatSelectors) {
             try {
-              // Try with --no-check-age to bypass age restrictions
-              const baseArgs = `-g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --no-check-age --extractor-args "youtube:player_client=${client}" -f "${formatSelector}"`;
+              // Try with different player clients to bypass restrictions
+              const baseArgs = `-g --skip-download --no-playlist --no-warnings --quiet --no-check-certificate --prefer-insecure --no-cache-dir --extractor-args "youtube:player_client=${client}" -f "${formatSelector}"`;
               const command = await buildYtDlpCommand(ytDlpPath, baseArgs, url);
               
               const videoUrlResult = await Promise.race([
