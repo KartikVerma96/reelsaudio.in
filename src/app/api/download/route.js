@@ -9,14 +9,33 @@ const execAsync = promisify(exec);
 
 /**
  * Get Node.js path for JS runtime
+ * Tries multiple common locations
  */
 async function getNodePath() {
+  const possiblePaths = ['/usr/bin/node', '/usr/local/bin/node', '/bin/node'];
+  
+  for (const nodePath of possiblePaths) {
+    try {
+      await execAsync(`${nodePath} --version`, { timeout: 2000 });
+      return nodePath;
+    } catch (error) {
+      continue;
+    }
+  }
+  
+  // Fallback: try which command
   try {
     const { stdout } = await execAsync('which node', { timeout: 2000 });
-    return stdout.trim();
+    const path = stdout.trim();
+    if (path) {
+      await execAsync(`${path} --version`, { timeout: 2000 });
+      return path;
+    }
   } catch (error) {
-    return null;
+    // Ignore
   }
+  
+  return null;
 }
 
 /**
@@ -24,6 +43,7 @@ async function getNodePath() {
  */
 async function buildYtDlpCommand(ytDlpPath, baseArgs, url) {
   const nodePath = await getNodePath();
+  // Always try to use JS runtime if Node.js is available
   const jsRuntimeFlag = nodePath ? `--js-runtimes node:${nodePath}` : '';
   
   // Rotating user agents to appear more human-like
@@ -35,7 +55,14 @@ async function buildYtDlpCommand(ytDlpPath, baseArgs, url) {
   ];
   const userAgent = userAgents[Math.floor(Math.random() * userAgents.length)];
   
-  return `"${ytDlpPath}" ${jsRuntimeFlag} ${baseArgs} --user-agent "${userAgent}" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" --add-header "Accept:text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" --add-header "Accept-Encoding:gzip, deflate, br" --add-header "DNT:1" --add-header "Connection:keep-alive" --add-header "Upgrade-Insecure-Requests:1" "${url}"`;
+  const command = `"${ytDlpPath}" ${jsRuntimeFlag} ${baseArgs} --user-agent "${userAgent}" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" --add-header "Accept:text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" --add-header "Accept-Encoding:gzip, deflate, br" --add-header "DNT:1" --add-header "Connection:keep-alive" --add-header "Upgrade-Insecure-Requests:1" "${url}"`;
+  
+  // Log command in development (without sensitive info)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('yt-dlp command:', command.replace(/--js-runtimes[^"]+/, '--js-runtimes [HIDDEN]'));
+  }
+  
+  return command;
 }
 
 /**
