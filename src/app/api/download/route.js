@@ -67,6 +67,44 @@ async function getNodePath() {
 }
 
 /**
+ * Normalize YouTube URL and generate alternative formats
+ * YouTube Shorts URLs sometimes work better in different formats
+ */
+function normalizeYouTubeUrl(url) {
+  const urlStr = url.trim();
+  const alternatives = [urlStr]; // Start with original
+  
+  // Extract video ID
+  let videoId = null;
+  
+  // Match shorts format: youtube.com/shorts/VIDEO_ID
+  const shortsMatch = urlStr.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]+)/i);
+  if (shortsMatch) {
+    videoId = shortsMatch[1];
+    // Add watch format alternative
+    alternatives.push(`https://www.youtube.com/watch?v=${videoId}`);
+    alternatives.push(`https://youtube.com/watch?v=${videoId}`);
+  }
+  
+  // Match watch format: youtube.com/watch?v=VIDEO_ID
+  const watchMatch = urlStr.match(/[?&]v=([a-zA-Z0-9_-]+)/i);
+  if (watchMatch) {
+    videoId = watchMatch[1];
+    // Add shorts format alternative
+    alternatives.push(`https://www.youtube.com/shorts/${videoId}`);
+    alternatives.push(`https://youtube.com/shorts/${videoId}`);
+  }
+  
+  // Remove query parameters from original
+  const cleanUrl = urlStr.split('?')[0].split('&')[0];
+  if (cleanUrl !== urlStr && !alternatives.includes(cleanUrl)) {
+    alternatives.push(cleanUrl);
+  }
+  
+  return alternatives;
+}
+
+/**
  * Build yt-dlp command with JS runtime and anti-bot headers
  */
 async function buildYtDlpCommand(ytDlpPath, baseArgs, url) {
@@ -74,17 +112,20 @@ async function buildYtDlpCommand(ytDlpPath, baseArgs, url) {
   // Always try to use JS runtime if Node.js is available
   const jsRuntimeFlag = nodePath ? `--js-runtimes node:${nodePath}` : '';
   
-  // Get cookies flag if cookies.txt exists
-  const cookiesFlag = getCookiesFlag();
+  // Rotating user agents to appear more human-like
+  const userAgents = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+  ];
+  const userAgent = userAgents[Math.floor(Math.random() * userAgents.length)];
   
-  // Use consistent mobile user agent (iOS works best with YouTube)
-  const userAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
-  
-  const command = `"${ytDlpPath}" ${jsRuntimeFlag} ${cookiesFlag} ${baseArgs} --user-agent "${userAgent}" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" --add-header "Accept:text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" --add-header "Accept-Encoding:gzip, deflate, br" --add-header "DNT:1" --add-header "Connection:keep-alive" --add-header "Upgrade-Insecure-Requests:1" "${url}"`;
+  const command = `"${ytDlpPath}" ${jsRuntimeFlag} ${baseArgs} --user-agent "${userAgent}" --referer "https://www.youtube.com/" --add-header "Accept-Language:en-US,en;q=0.9" --add-header "Accept:text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" --add-header "Accept-Encoding:gzip, deflate, br" --add-header "DNT:1" --add-header "Connection:keep-alive" --add-header "Upgrade-Insecure-Requests:1" "${url}"`;
   
   // Log command in development (without sensitive info)
   if (process.env.NODE_ENV === 'development') {
-    console.log('yt-dlp command:', command.replace(/--js-runtimes[^"]+/, '--js-runtimes [HIDDEN]').replace(/--cookies[^"]+/, '--cookies [HIDDEN]'));
+    console.log('yt-dlp command:', command.replace(/--js-runtimes[^"]+/, '--js-runtimes [HIDDEN]'));
   }
   
   return command;
@@ -231,125 +272,138 @@ export async function POST(request) {
           lastError = simpleError.message || simpleError.toString();
         }
         
-        // SECOND: If simple approach failed, try player clients
+        // SECOND: If simple approach failed, try player clients with multiple URL formats
         if (!audioUrl || !audioUrl.startsWith('http')) {
-          const playerClients = ['ios', 'android', 'web'];
+          const playerClients = ['ios', 'android', 'web', 'mweb', 'tv_embedded'];
+          const urlAlternatives = normalizeYouTubeUrl(url);
           
-          for (let i = 0; i < playerClients.length; i++) {
-            const client = playerClients[i];
+          // Try each URL format with each player client
+          for (const altUrl of urlAlternatives) {
+            if (audioUrl && audioUrl.startsWith('http')) break;
             
-            if (i > 0) {
-              await new Promise(resolve => setTimeout(resolve, 500));
-            }
-            
-            try {
-              const baseArgs = `-g --skip-download --no-playlist --no-warnings --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub --extractor-args "youtube:player_client=${client}" -f "bestaudio/best"`;
-              const command = await buildYtDlpCommand(ytDlpPath, baseArgs, url);
+            for (let i = 0; i < playerClients.length; i++) {
+              const client = playerClients[i];
               
-              const audioResult = await Promise.race([
-                execAsync(command, { timeout: 15000, maxBuffer: 512 * 1024 }),
-                new Promise((_, reject) => 
-                  setTimeout(() => reject(new Error('Extraction timeout')), 15000)
-                )
-              ]).catch((error) => {
-                lastError = error.message || error.toString();
-                return { stdout: '', stderr: error.message || '' };
-              });
-              
-              audioUrl = audioResult.stdout.trim().split('\n')[0];
-              
-              if (audioUrl && audioUrl.startsWith('http')) {
-                const isHLS = audioUrl.includes('.m3u8');
-                return NextResponse.json({
-                  success: true,
-                  audioUrl: isHLS ? null : audioUrl,
-                  videoUrl: isHLS ? audioUrl : null,
-                  format: 'mp3',
-                  title: 'Audio',
-                  duration: null,
-                  thumbnail: null,
-                  extractAudioFromVideo: isHLS,
-                  isHLS: isHLS,
-                });
+              if (i > 0 || urlAlternatives.indexOf(altUrl) > 0) {
+                await new Promise(resolve => setTimeout(resolve, 500));
               }
-            } catch (clientError) {
-              lastError = clientError.message || clientError.toString();
-              continue;
+              
+              try {
+                const baseArgs = `-g --skip-download --no-playlist --no-warnings --no-check-certificate --prefer-insecure --no-cache-dir --no-mtime --no-write-thumbnail --no-write-info-json --no-write-description --no-write-annotations --no-write-sub --no-write-auto-sub --extractor-args "youtube:player_client=${client}" -f "bestaudio/best"`;
+                const command = await buildYtDlpCommand(ytDlpPath, baseArgs, altUrl);
+                
+                const audioResult = await Promise.race([
+                  execAsync(command, { timeout: 15000, maxBuffer: 512 * 1024 }),
+                  new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Extraction timeout')), 15000)
+                  )
+                ]).catch((error) => {
+                  const errorMsg = error.stderr || error.message || error.toString();
+                  lastError = errorMsg;
+                  return { stdout: '', stderr: errorMsg };
+                });
+                
+                audioUrl = audioResult.stdout.trim().split('\n')[0];
+                
+                if (audioUrl && audioUrl.startsWith('http')) {
+                  const isHLS = audioUrl.includes('.m3u8');
+                  console.log(`SUCCESS: Extracted audio using URL format "${altUrl}" with client "${client}"`);
+                  return NextResponse.json({
+                    success: true,
+                    audioUrl: isHLS ? null : audioUrl,
+                    videoUrl: isHLS ? audioUrl : null,
+                    format: 'mp3',
+                    title: 'Audio',
+                    duration: null,
+                    thumbnail: null,
+                    extractAudioFromVideo: isHLS,
+                    isHLS: isHLS,
+                  });
+                }
+              } catch (clientError) {
+                const errorMsg = clientError.stderr || clientError.message || clientError.toString();
+                lastError = errorMsg;
+                continue;
+              }
             }
           }
         }
         
         // If all audio URL extraction methods fail, try to get video URL for client-side extraction
         // This works even when audio formats are not directly available
+        // Try multiple URL formats and player clients
         const videoFormatSelectors = ['best[height<=720]/best', 'best[height<=480]/best', 'worst'];
-        const videoClients = ['ios', 'android', 'web', 'mweb'];
+        const videoClients = ['ios', 'android', 'web', 'mweb', 'tv_embedded'];
+        const urlAlternatives = normalizeYouTubeUrl(url);
         let videoUrl = null;
         
-        for (let i = 0; i < videoClients.length && !videoUrl; i++) {
-          const client = videoClients[i];
+        // Try each URL format
+        for (const altUrl of urlAlternatives) {
+          if (videoUrl) break;
           
-          // Add delay between attempts
-          if (i > 0) {
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
-          
-          for (const formatSelector of videoFormatSelectors) {
-            try {
-              // Try with different player clients to bypass restrictions
-              const baseArgs = `-g --skip-download --no-playlist --no-warnings --no-check-certificate --prefer-insecure --no-cache-dir --extractor-args "youtube:player_client=${client}" -f "${formatSelector}"`;
-              const command = await buildYtDlpCommand(ytDlpPath, baseArgs, url);
-              
-              const videoUrlResult = await Promise.race([
-                execAsync(command, { timeout: 15000, maxBuffer: 512 * 1024 }),
-                new Promise((_, reject) => 
-                  setTimeout(() => reject(new Error('Video URL extraction timeout')), 15000)
-                )
-              ]).catch((error) => {
-                // Capture both stdout and stderr from error
-                const errorMsg = error.message || error.toString();
-                const stderr = error.stderr || '';
-                const stdout = error.stdout || '';
+          for (let i = 0; i < videoClients.length && !videoUrl; i++) {
+            const client = videoClients[i];
+            
+            // Add delay between attempts
+            if (i > 0 || urlAlternatives.indexOf(altUrl) > 0) {
+              await new Promise(resolve => setTimeout(resolve, 500));
+            }
+            
+            for (const formatSelector of videoFormatSelectors) {
+              try {
+                // Try with different player clients to bypass restrictions
+                const baseArgs = `-g --skip-download --no-playlist --no-warnings --no-check-certificate --prefer-insecure --no-cache-dir --extractor-args "youtube:player_client=${client}" -f "${formatSelector}"`;
+                const command = await buildYtDlpCommand(ytDlpPath, baseArgs, altUrl);
                 
-                // Log error in development
-                if (process.env.NODE_ENV === 'development') {
-                  console.error(`yt-dlp video URL error for client ${client}, format ${formatSelector}:`, errorMsg);
-                  if (stderr) console.error('stderr:', stderr.substring(0, 500));
-                  if (stdout) console.error('stdout:', stdout.substring(0, 500));
-                }
+                const videoUrlResult = await Promise.race([
+                  execAsync(command, { timeout: 15000, maxBuffer: 512 * 1024 }),
+                  new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Video URL extraction timeout')), 15000)
+                  )
+                ]).catch((error) => {
+                  // Capture both stdout and stderr from error
+                  const errorMsg = error.message || error.toString();
+                  const stderr = error.stderr || '';
+                  const stdout = error.stdout || '';
+                  
+                  // Log error in development
+                  if (process.env.NODE_ENV === 'development') {
+                    console.error(`yt-dlp video URL error for URL "${altUrl}", client ${client}, format ${formatSelector}:`, errorMsg);
+                    if (stderr) console.error('stderr:', stderr.substring(0, 500));
+                    if (stdout) console.error('stdout:', stdout.substring(0, 500));
+                  }
+                  
+                  lastError = errorMsg;
+                  
+                  // Check if it's a bot detection error
+                  if (errorMsg.includes('Sign in to confirm') || errorMsg.includes('LOGIN_REQUIRED') || 
+                      stderr.includes('Sign in to confirm') || stderr.includes('LOGIN_REQUIRED')) {
+                    lastError = 'YouTube is requiring authentication for this video';
+                  }
+                  
+                  return { stdout: stdout || '', stderr: stderr || errorMsg };
+                });
                 
-                lastError = errorMsg;
+                const extractedUrl = videoUrlResult.stdout.trim().split('\n')[0];
                 
-                // Check if it's a bot detection error
-                if (errorMsg.includes('Sign in to confirm') || errorMsg.includes('LOGIN_REQUIRED') || 
-                    stderr.includes('Sign in to confirm') || stderr.includes('LOGIN_REQUIRED')) {
+                // Check stderr for bot detection errors
+                if (videoUrlResult.stderr && (videoUrlResult.stderr.includes('Sign in to confirm') || videoUrlResult.stderr.includes('LOGIN_REQUIRED'))) {
                   lastError = 'YouTube is requiring authentication for this video';
+                  continue; // Try next format/client
                 }
                 
-                return { stdout: stdout || '', stderr: stderr || errorMsg };
-              });
-              
-              const extractedUrl = videoUrlResult.stdout.trim().split('\n')[0];
-              
-              // Check stderr for bot detection errors
-              if (videoUrlResult.stderr && (videoUrlResult.stderr.includes('Sign in to confirm') || videoUrlResult.stderr.includes('LOGIN_REQUIRED'))) {
-                lastError = 'YouTube is requiring authentication for this video';
-                continue; // Try next format/client
+                // Log success
+                if (extractedUrl && extractedUrl.startsWith('http')) {
+                  console.log(`SUCCESS: Extracted video URL using URL format "${altUrl}" with client "${client}", format "${formatSelector}"`);
+                  videoUrl = extractedUrl;
+                  break; // Found a valid URL
+                }
+              } catch (formatError) {
+                const errorMsg = formatError.stderr || formatError.message || formatError.toString();
+                lastError = errorMsg;
+                // Try next format selector
+                continue;
               }
-              
-              // Log success in development
-              if (process.env.NODE_ENV === 'development' && extractedUrl && extractedUrl.startsWith('http')) {
-                console.log(`Successfully extracted video URL using client ${client}, format ${formatSelector}`);
-              }
-              
-              // Accept HLS URLs too - client can extract audio from them
-              if (extractedUrl && extractedUrl.startsWith('http')) {
-                videoUrl = extractedUrl;
-                break; // Found a valid URL
-              }
-            } catch (formatError) {
-              lastError = formatError.message || formatError.toString();
-              // Try next format selector
-              continue;
             }
           }
         }
