@@ -7,33 +7,7 @@ import path from 'path';
 
 const execAsync = promisify(exec);
 
-/**
- * Check if cookies file exists and return cookie flag
- * In standalone mode, process.cwd() is .next/standalone, so we need to go up to project root
- */
-function getCookiesFlag() {
-  // Try multiple possible locations (check absolute path first for reliability)
-  const possiblePaths = [
-    '/var/www/freereelsdownload/cookies.txt', // Absolute path (most reliable)
-    path.join(process.cwd(), '..', '..', 'cookies.txt'), // Two levels up from standalone
-    path.join(process.cwd(), '..', 'cookies.txt'), // One level up from standalone
-    path.join(process.cwd(), 'cookies.txt'), // Current directory
-  ];
-  
-  for (const cookiesPath of possiblePaths) {
-    try {
-      const resolvedPath = path.resolve(cookiesPath);
-      if (fs.existsSync(resolvedPath)) {
-        return `--cookies "${resolvedPath}"`;
-      }
-    } catch (error) {
-      // Continue to next path
-      continue;
-    }
-  }
-  
-  return '';
-}
+// Cookie support removed - user requested cookie-free solution
 
 /**
  * Get Node.js path for JS runtime
@@ -202,7 +176,7 @@ export async function POST(request) {
       let videoInfo;
 
       if (format === 'mp3' || format === 'audio') {
-        // Strategy: Try simple approach first (works best with cookies), then player clients
+        // Strategy: Try simple approach first, then player clients with multiple URL formats
         // 1. Try simple extraction without player client args (what worked in direct test)
         // 2. Try different player clients if simple approach fails
         // 3. Fallback to video URL extraction for client-side audio extraction
