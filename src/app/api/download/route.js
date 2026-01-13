@@ -426,12 +426,19 @@ export async function POST(request) {
                 continue;
               }
               
-              // Break client loop on bot detection
+              // Break formatSelector loop on bot detection
               if (lastError && (lastError.includes('Sign in to confirm') || lastError.includes('LOGIN_REQUIRED') || 
                   lastError.includes('Failed to extract any player response'))) {
                 break;
               }
+            } // End formatSelector loop
+            
+            // Break client loop on bot detection
+            if (lastError && (lastError.includes('Sign in to confirm') || lastError.includes('LOGIN_REQUIRED') || 
+                lastError.includes('Failed to extract any player response'))) {
+              break;
             }
+          } // End client loop
             
             // Break URL loop on bot detection
             if (lastError && (lastError.includes('Sign in to confirm') || lastError.includes('LOGIN_REQUIRED') || 
