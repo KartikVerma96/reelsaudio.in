@@ -247,9 +247,17 @@ export async function POST(request) {
         }
         
         // SECOND: If simple approach failed, try player clients with multiple URL formats
+        // Early exit if we detect bot detection errors
+        const isBotDetectionError = lastError && (
+          lastError.includes('Sign in to confirm') || 
+          lastError.includes('LOGIN_REQUIRED') ||
+          lastError.includes('Failed to extract any player response')
+        );
+        
         if (!audioUrl || !audioUrl.startsWith('http')) {
-          const playerClients = ['ios', 'android', 'web', 'mweb', 'tv_embedded'];
-          const urlAlternatives = normalizeYouTubeUrl(url);
+          // Only try a few combinations if we haven't detected bot blocking yet
+          const playerClients = isBotDetectionError ? ['ios', 'android'] : ['ios', 'android', 'web'];
+          const urlAlternatives = normalizeYouTubeUrl(url).slice(0, 2); // Limit to first 2 URL formats
           
           // Try each URL format with each player client
           for (const altUrl of urlAlternatives) {
@@ -267,15 +275,28 @@ export async function POST(request) {
                 const command = await buildYtDlpCommand(ytDlpPath, baseArgs, altUrl);
                 
                 const audioResult = await Promise.race([
-                  execAsync(command, { timeout: 15000, maxBuffer: 512 * 1024 }),
+                  execAsync(command, { timeout: 10000, maxBuffer: 512 * 1024 }),
                   new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Extraction timeout')), 15000)
+                    setTimeout(() => reject(new Error('Extraction timeout')), 10000)
                   )
                 ]).catch((error) => {
                   const errorMsg = error.stderr || error.message || error.toString();
                   lastError = errorMsg;
+                  
+                  // Check for bot detection
+                  if (errorMsg.includes('Sign in to confirm') || errorMsg.includes('LOGIN_REQUIRED') || 
+                      errorMsg.includes('Failed to extract any player response')) {
+                    // Early exit - don't try more if bot detection
+                    return { stdout: '', stderr: errorMsg, botDetected: true };
+                  }
+                  
                   return { stdout: '', stderr: errorMsg };
                 });
+                
+                // Early exit if bot detected
+                if (audioResult.botDetected) {
+                  break;
+                }
                 
                 audioUrl = audioResult.stdout.trim().split('\n')[0];
                 
@@ -297,42 +318,62 @@ export async function POST(request) {
               } catch (clientError) {
                 const errorMsg = clientError.stderr || clientError.message || clientError.toString();
                 lastError = errorMsg;
+                
+                // Early exit on bot detection
+                if (errorMsg.includes('Sign in to confirm') || errorMsg.includes('LOGIN_REQUIRED') || 
+                    errorMsg.includes('Failed to extract any player response')) {
+                  break;
+                }
                 continue;
               }
+            }
+            
+            // Break outer loop if bot detected
+            if (lastError && (lastError.includes('Sign in to confirm') || lastError.includes('LOGIN_REQUIRED') || 
+                lastError.includes('Failed to extract any player response'))) {
+              break;
             }
           }
         }
         
         // If all audio URL extraction methods fail, try to get video URL for client-side extraction
-        // This works even when audio formats are not directly available
-        // Try multiple URL formats and player clients
-        const videoFormatSelectors = ['best[height<=720]/best', 'best[height<=480]/best', 'worst'];
-        const videoClients = ['ios', 'android', 'web', 'mweb', 'tv_embedded'];
-        const urlAlternatives = normalizeYouTubeUrl(url);
+        // Skip if we detected bot blocking (won't work anyway)
+        const skipVideoExtraction = lastError && (
+          lastError.includes('Sign in to confirm') || 
+          lastError.includes('LOGIN_REQUIRED') ||
+          lastError.includes('Failed to extract any player response')
+        );
+        
         let videoUrl = null;
         
-        // Try each URL format
-        for (const altUrl of urlAlternatives) {
-          if (videoUrl) break;
+        if (!skipVideoExtraction) {
+          // Try limited combinations for video URL
+          const videoFormatSelectors = ['best[height<=720]/best', 'worst'];
+          const videoClients = ['ios', 'android'];
+          const urlAlternatives = normalizeYouTubeUrl(url).slice(0, 2); // Limit to first 2 URL formats
           
-          for (let i = 0; i < videoClients.length && !videoUrl; i++) {
-            const client = videoClients[i];
+          // Try each URL format
+          for (const altUrl of urlAlternatives) {
+            if (videoUrl) break;
             
-            // Add delay between attempts
-            if (i > 0 || urlAlternatives.indexOf(altUrl) > 0) {
-              await new Promise(resolve => setTimeout(resolve, 500));
-            }
-            
-            for (const formatSelector of videoFormatSelectors) {
+            for (let i = 0; i < videoClients.length && !videoUrl; i++) {
+              const client = videoClients[i];
+              
+              // Add delay between attempts
+              if (i > 0 || urlAlternatives.indexOf(altUrl) > 0) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+              }
+              
+              for (const formatSelector of videoFormatSelectors) {
               try {
                 // Try with different player clients to bypass restrictions
                 const baseArgs = `-g --skip-download --no-playlist --no-warnings --no-check-certificate --prefer-insecure --no-cache-dir --extractor-args "youtube:player_client=${client}" -f "${formatSelector}"`;
                 const command = await buildYtDlpCommand(ytDlpPath, baseArgs, altUrl);
                 
                 const videoUrlResult = await Promise.race([
-                  execAsync(command, { timeout: 15000, maxBuffer: 512 * 1024 }),
+                  execAsync(command, { timeout: 10000, maxBuffer: 512 * 1024 }),
                   new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Video URL extraction timeout')), 15000)
+                    setTimeout(() => reject(new Error('Video URL extraction timeout')), 10000)
                   )
                 ]).catch((error) => {
                   // Capture both stdout and stderr from error
@@ -363,7 +404,7 @@ export async function POST(request) {
                 // Check stderr for bot detection errors
                 if (videoUrlResult.stderr && (videoUrlResult.stderr.includes('Sign in to confirm') || videoUrlResult.stderr.includes('LOGIN_REQUIRED'))) {
                   lastError = 'YouTube is requiring authentication for this video';
-                  continue; // Try next format/client
+                  break; // Exit loops on bot detection
                 }
                 
                 // Log success
@@ -375,9 +416,27 @@ export async function POST(request) {
               } catch (formatError) {
                 const errorMsg = formatError.stderr || formatError.message || formatError.toString();
                 lastError = errorMsg;
+                
+                // Early exit on bot detection
+                if (errorMsg.includes('Sign in to confirm') || errorMsg.includes('LOGIN_REQUIRED') || 
+                    errorMsg.includes('Failed to extract any player response')) {
+                  break;
+                }
                 // Try next format selector
                 continue;
               }
+              
+              // Break client loop on bot detection
+              if (lastError && (lastError.includes('Sign in to confirm') || lastError.includes('LOGIN_REQUIRED') || 
+                  lastError.includes('Failed to extract any player response'))) {
+                break;
+              }
+            }
+            
+            // Break URL loop on bot detection
+            if (lastError && (lastError.includes('Sign in to confirm') || lastError.includes('LOGIN_REQUIRED') || 
+                lastError.includes('Failed to extract any player response'))) {
+              break;
             }
           }
         }
