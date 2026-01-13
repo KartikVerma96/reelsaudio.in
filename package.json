@@ -11,7 +11,9 @@
     "docker:run": "docker run -p 3000:3000 reelsaudio:latest",
     "docker:compose": "docker-compose up",
     "health": "curl http://localhost:3000/api/health",
-    "metrics": "curl http://localhost:3000/api/metrics"
+    "health:prod": "curl https://freereelsdownload.com/api/health",
+    "metrics": "curl http://localhost:3000/api/metrics",
+    "metrics:prod": "curl https://freereelsdownload.com/api/metrics"
   },
   "dependencies": {
     "@ffmpeg/core": "^0.12.6",
